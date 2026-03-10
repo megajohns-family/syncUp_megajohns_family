@@ -4,5 +4,5 @@
 - Bartosz Sieradzki
 - Oleksandr Shybitskyi
 
-#Trello workspace
+# Trello workspace
 - https://trello.com/b/v7kFewCk/syncup-project

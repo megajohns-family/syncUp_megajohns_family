@@ -1,11 +1,11 @@
-# **megajohns family members:**
+# **Megajohn's family members:**
 - Adam Kowalczyk
 - Tymon Budzowski
 - Bartosz Sieradzki
 - Oleksandr Shybitskyi
 
 # Trello workspace
-- https://trello.com/b/v7kFewCk/syncup-project
+https://trello.com/b/v7kFewCk/syncup-project
 # Functionality (backlog)
 ## User privileges
 - Register user

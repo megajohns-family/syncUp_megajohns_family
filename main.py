@@ -1,4 +1,4 @@
-from app.models import TaskManager
+from app.models import TaskManager, ColorTags
 
 manager = TaskManager()
 
@@ -16,5 +16,14 @@ manager.change_task_description(t3, "Users getting 401 on valid credentials — 
 
 manager.move_task(t2, doing)
 manager.move_task(t3, done)
+
+manager.add_color_tag(t1, ColorTags.GREEN)
+manager.change_color_tag(t1, ColorTags.PURPLE)
+
+manager.add_color_tag(t3, ColorTags.GREEN)
+manager.remove_color_tag(t3)
+
+manager.add_color_tag(t5, ColorTags.RED)
+manager.change_color_tag(t5, ColorTags.YELLOW)
 
 manager.display()

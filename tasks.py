@@ -109,5 +109,5 @@ class TaskManager(BaseModel):
             for task_id, task in tasks.items():
                 print(f"  #{task_id}  {task.name}")
                 if task.description:
-                    print(f"       {task.description}")
+                    print(f"       - {task.description}")
         print()

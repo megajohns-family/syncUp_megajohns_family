@@ -1,4 +1,4 @@
-from taski import TaskManager
+from tasks import TaskManager
 
 manager = TaskManager()
 

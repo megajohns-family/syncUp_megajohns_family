@@ -1,10 +1,10 @@
-from taski import TaskManager
+from app.models import TaskManager
 
 manager = TaskManager()
 
-todo   = manager.add_list("To Do")
-doing  = manager.add_list("Doing")
-done   = manager.add_list("Done")
+todo = manager.add_list("To Do")
+doing = manager.add_list("Doing")
+done = manager.add_list("Done")
 
 t1 = manager.add_task(todo, "Buy groceries", "Milk, bread, eggs")
 t2 = manager.add_task(todo, "Do Python homework", "Chapter 4 exercises and quiz prep")

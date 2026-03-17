@@ -2,20 +2,19 @@ from taski import TaskManager
 
 manager = TaskManager()
 
+todo   = manager.add_list("To Do")
+doing  = manager.add_list("Doing")
+done   = manager.add_list("Done")
 
-task1 = manager.add_task("Buy groceries")
-task2 = manager.add_task("Do homework")
+t1 = manager.add_task(todo, "Buy groceries", "Milk, bread, eggs")
+t2 = manager.add_task(todo, "Do Python homework", "Chapter 4 exercises and quiz prep")
+t3 = manager.add_task(doing, "Fix login bug", "Users getting 401 on valid credentials")
+t4 = manager.add_task(todo, "Plan weekend trip", "Look into camping spots near the lake")
+t5 = manager.add_task(done, "Set up repo", "Created GitHub org and invited family members")
 
-manager.add_description(task1, "Milk, bread, eggs")
+manager.change_task_description(t3, "Users getting 401 on valid credentials — check JWT expiry logic")
 
-manager.change_task_name(task2, "Do Python homework")
+manager.move_task(t2, doing)
+manager.move_task(t3, done)
 
-
-manager.change_description(task1, "Milk, bread, eggs, cheese")
-
-
-manager.remove_description(task1)
-
-manager.remove_task(task2)
-
-print(manager.list_tasks())
+manager.display()

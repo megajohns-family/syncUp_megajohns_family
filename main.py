@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 from app.models import TaskManager
 
 manager = TaskManager()
@@ -19,13 +18,3 @@ manager.move_task(t2, doing)
 manager.move_task(t3, done)
 
 manager.display()
-=======
-from fastapi import FastAPI
-from app.database import *
-
-app = FastAPI()
-
-@app.on_event("startup")
-def start():
-    init_db()
->>>>>>> 2df01b2 (Database structure and DB init)

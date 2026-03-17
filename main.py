@@ -1,4 +1,4 @@
-from tasks import TaskManager
+from app.models import TaskManager
 
 manager = TaskManager()
 

@@ -7,12 +7,24 @@ def init_db():
     with get_db() as db:
         db.execute("""
             CREATE TABLE IF NOT EXISTS users(
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER PRIMARY KEY AUTOINCREMENT,
                 username TEXT UNIQUE NOT NULL,
                 pw_hash TEXT NOT NULL,
-                session INTEGER DEFAULT 1
-            )
-        """)
+                session INTEGER DEFAULT 1)
+                """)
+        db.execute("""
+            CREATE TABLE IF NOT EXISTS tasks(
+                task_id INT PRIMARY KEY,
+                task_name VARCHAR(30),
+                task_desc TEXT)
+                """)
+        db.execute("""
+            CREATE TABLE IF NOT EXISTS lists(
+                list_id INT PRIMARY KEY,
+                list_name VARCHAR(30),
+                task_id INT,
+                FOREIGN KEY(task_id) REFERENCES tasks(task_id))
+                """)
         db.commit()
 
 @contextmanager

@@ -70,6 +70,18 @@ class TaskManager:
             return None
         return {tid: self.tasks[tid] for tid in self.lists[list_id]["task_ids"]}
 
+    def display(self):
+        for lst in self.get_all().values():
+            print(f"\n[ {lst['name']} ]")
+            tasks = lst["tasks"]
+            if not tasks:
+                print("  (empty)")
+            for task_id, task in tasks.items():
+                print(f"  #{task_id}  {task['name']}")
+                if task["description"]:
+                    print(f"       {task['description']}")
+        print()
+
     def get_all(self):
         return {
             list_id: {

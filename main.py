@@ -1,5 +1,7 @@
-from taski import TaskManager
+from tasks import TaskManager
+from users import Users
 
+users = Users()
 manager = TaskManager()
 
 todo   = manager.add_list("To Do")
@@ -16,5 +18,25 @@ manager.change_task_description(t3, "Users getting 401 on valid credentials — 
 
 manager.move_task(t2, doing)
 manager.move_task(t3, done)
+
+while(True):
+    option = input("Would you like to log in, register or delete account? (l/r/d or b): ")
+
+    if option == 'r':
+        login = input("Input login: ")
+        password = input("Input password: ")
+        print(users.register_user(login, password))
+
+    elif option == 'l':
+        login = input("Input login: ")
+        password = input("Input password: ")
+        print(users.login_user(login, password))
+
+    elif option == 'd':
+        login = input("Input login: ")
+        password = input("Input password: ")
+        print(users.delete_account(login, password))
+    elif option =='b':
+        break
 
 manager.display()

@@ -1,10 +1,18 @@
 from pydantic import BaseModel, model_validator, Field
+from enum import Enum
 
+class ColorTags(Enum):
+    NOTHING = 1
+    GREEN = 2
+    RED = 3
+    YELLOW = 4
+    BLUE = 5
+    PURPLE = 6
 
 class Task(BaseModel):
     name: str
     description: str = ""
-
+    color_tag: ColorTags = ColorTags.NOTHING
 
 class TaskList(BaseModel):
     name: str
@@ -90,6 +98,28 @@ class TaskManager(BaseModel):
         if list_id not in self.lists:
             return None
         return {tid: self.tasks[tid] for tid in self.lists[list_id].task_ids}
+    
+    def add_color_tag(self, task_id: int, color_tag: ColorTags) -> bool:
+        if task_id not in self.tasks:
+            return False
+        elif self.tasks[task_id].color_tag != ColorTags.NOTHING:
+            return False
+        self.tasks[task_id].color_tag = color_tag
+        return True
+    
+    def remove_color_tag(self, task_id: int) -> bool:
+        if task_id not in self.tasks:
+            return False
+        elif self.tasks[task_id].color_tag == ColorTags.NOTHING:
+            return False
+        
+        self.tasks[task_id].color_tag = ColorTags.NOTHING
+
+    def change_color_tag(self, task_id: int, color_tag: ColorTags) -> bool:
+        if task_id not in self.tasks:
+            return False
+        self.tasks[task_id].color_tag = color_tag
+        return True
 
     def get_all(self) -> dict:
         return {
@@ -107,7 +137,8 @@ class TaskManager(BaseModel):
             if not tasks:
                 print("  (empty)")
             for task_id, task in tasks.items():
-                print(f"  #{task_id}  {task.name}")
+                color = f" [{task.color_tag.name}]" if task.color_tag != ColorTags.NOTHING else ""
+                print(f"  #{task_id}  {task.name}{color}")
                 if task.description:
                     print(f"       - {task.description}")
         print()

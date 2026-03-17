@@ -1,46 +1,80 @@
 class TaskManager:
     def __init__(self):
+        self.lists = {}
         self.tasks = {}
-        self.next_id = 1
+        self._next_list_id = 1
+        self._next_task_id = 1
 
-    def add_task(self, name):
-        task_id = self.next_id
-        self.tasks[task_id] = {
-            "name": name,
-            "description": ""
-        }
-        self.next_id += 1
+    def add_list(self, name):
+        list_id = self._next_list_id
+        self.lists[list_id] = {"name": name, "task_ids": []}
+        self._next_list_id += 1
+        return list_id
+
+    def remove_list(self, list_id):
+        if list_id not in self.lists:
+            return False
+        for task_id in self.lists[list_id]["task_ids"]:
+            del self.tasks[task_id]
+        del self.lists[list_id]
+        return True
+
+    def rename_list(self, list_id, new_name):
+        if list_id not in self.lists:
+            return False
+        self.lists[list_id]["name"] = new_name
+        return True
+
+    def add_task(self, list_id, name, description=""):
+        if list_id not in self.lists:
+            return None
+        task_id = self._next_task_id
+        self.tasks[task_id] = {"name": name, "description": description, "list_id": list_id}
+        self.lists[list_id]["task_ids"].append(task_id)
+        self._next_task_id += 1
         return task_id
 
     def remove_task(self, task_id):
-        if task_id in self.tasks:
-            del self.tasks[task_id]
-            return True
-        return False
+        if task_id not in self.tasks:
+            return False
+        list_id = self.tasks[task_id]["list_id"]
+        self.lists[list_id]["task_ids"].remove(task_id)
+        del self.tasks[task_id]
+        return True
 
     def change_task_name(self, task_id, new_name):
-        if task_id in self.tasks:
-            self.tasks[task_id]["name"] = new_name
-            return True
-        return False
+        if task_id not in self.tasks:
+            return False
+        self.tasks[task_id]["name"] = new_name
+        return True
 
-    def add_description(self, task_id, description):
-        if task_id in self.tasks:
-            self.tasks[task_id]["description"] = description
-            return True
-        return False
+    def change_task_description(self, task_id, new_description):
+        if task_id not in self.tasks:
+            return False
+        self.tasks[task_id]["description"] = new_description
+        return True
 
-    def change_description(self, task_id, new_description):
-        if task_id in self.tasks:
-            self.tasks[task_id]["description"] = new_description
+    def move_task(self, task_id, target_list_id):
+        if task_id not in self.tasks or target_list_id not in self.lists:
+            return False
+        source_list_id = self.tasks[task_id]["list_id"]
+        if source_list_id == target_list_id:
             return True
-        return False
+        self.lists[source_list_id]["task_ids"].remove(task_id)
+        self.lists[target_list_id]["task_ids"].append(task_id)
+        self.tasks[task_id]["list_id"] = target_list_id
+        return True
 
-    def remove_description(self, task_id):
-        if task_id in self.tasks:
-            self.tasks[task_id]["description"] = ""
-            return True
-        return False
+    def get_list_tasks(self, list_id):
+        if list_id not in self.lists:
+            return None
+        return {tid: self.tasks[tid] for tid in self.lists[list_id]["task_ids"]}
 
-    def list_tasks(self):
-        return self.tasks
+    def get_all(self):
+        return {
+            list_id: {
+                "name": lst["name"],
+                "tasks": self.get_list_tasks(list_id)
+            }
+            for list_id, lst in self.lists.items()
+        }

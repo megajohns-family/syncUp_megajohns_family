@@ -2,20 +2,25 @@ from taski import TaskManager
 
 manager = TaskManager()
 
+todo   = manager.add_list("To Do")
+doing  = manager.add_list("Doing")
+done   = manager.add_list("Done")
 
-task1 = manager.add_task("Buy groceries")
-task2 = manager.add_task("Do homework")
+t1 = manager.add_task(todo, "Buy groceries", "Milk, bread, eggs")
+t2 = manager.add_task(todo, "Do Python homework")
+t3 = manager.add_task(doing, "Fix login bug")
 
-manager.add_description(task1, "Milk, bread, eggs")
+manager.move_task(t2, doing)  
+manager.move_task(t3, done) 
 
-manager.change_task_name(task2, "Do Python homework")
+def display(manager):
+    for lst in manager.get_all().values():
+        print(f"\n[ {lst['name']} ]")
+        tasks = lst["tasks"]
+        if not tasks:
+            print("  (empty)")
+        for task_id, task in tasks.items():
+            desc = f" — {task['description']}" if task["description"] else ""
+            print(f"  #{task_id} {task['name']}{desc}")
 
-
-manager.change_description(task1, "Milk, bread, eggs, cheese")
-
-
-manager.remove_description(task1)
-
-manager.remove_task(task2)
-
-print(manager.list_tasks())
+display(manager)

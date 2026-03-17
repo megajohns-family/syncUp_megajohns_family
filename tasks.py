@@ -4,13 +4,11 @@ from pydantic import BaseModel, model_validator, Field
 class Task(BaseModel):
     name: str
     description: str = ""
-    list_id: int
 
 
 class TaskList(BaseModel):
     name: str
     task_ids: list[int] = Field(default_factory=list)
-
 
 class TaskManager(BaseModel):
     lists: dict[int, TaskList] = Field(default_factory=dict)
@@ -46,11 +44,14 @@ class TaskManager(BaseModel):
         self.lists[list_id].name = new_name
         return True
 
+    def _find_list_of_task(self, task_id: int) -> int | None:
+        return next((lid for lid, lst in self.lists.items() if task_id in lst.task_ids), None)
+
     def add_task(self, list_id: int, name: str, description: str = "") -> int | None:
         if list_id not in self.lists:
             return None
         task_id = self._next_task_id
-        self.tasks[task_id] = Task(name=name, description=description, list_id=list_id)
+        self.tasks[task_id] = Task(name=name, description=description)
         self.lists[list_id].task_ids.append(task_id)
         self._next_task_id += 1
         return task_id
@@ -58,7 +59,7 @@ class TaskManager(BaseModel):
     def remove_task(self, task_id: int) -> bool:
         if task_id not in self.tasks:
             return False
-        list_id = self.tasks[task_id].list_id
+        list_id = self._find_list_of_task(task_id)
         self.lists[list_id].task_ids.remove(task_id)
         del self.tasks[task_id]
         return True
@@ -78,12 +79,11 @@ class TaskManager(BaseModel):
     def move_task(self, task_id: int, target_list_id: int) -> bool:
         if task_id not in self.tasks or target_list_id not in self.lists:
             return False
-        source_list_id = self.tasks[task_id].list_id
+        source_list_id = self._find_list_of_task(task_id)
         if source_list_id == target_list_id:
             return True
         self.lists[source_list_id].task_ids.remove(task_id)
         self.lists[target_list_id].task_ids.append(task_id)
-        self.tasks[task_id].list_id = target_list_id
         return True
 
     def get_list_tasks(self, list_id: int) -> dict[int, Task] | None:

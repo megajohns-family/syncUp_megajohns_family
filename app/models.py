@@ -1,5 +1,8 @@
 from pydantic import BaseModel, model_validator, Field
 from enum import Enum
+from typing import Optional
+import json
+from .hash import hash_password, verify_password
 
 class ColorTags(Enum):
     NOTHING = 1
@@ -8,6 +11,8 @@ class ColorTags(Enum):
     YELLOW = 4
     BLUE = 5
     PURPLE = 6
+
+# Tasks and lists
 
 class Task(BaseModel):
     name: str
@@ -52,10 +57,10 @@ class TaskManager(BaseModel):
         self.lists[list_id].name = new_name
         return True
 
-    def _find_list_of_task(self, task_id: int) -> int | None:
+    def _find_list_of_task(self, task_id: int) -> Optional[int]:
         return next((lid for lid, lst in self.lists.items() if task_id in lst.task_ids), None)
 
-    def add_task(self, list_id: int, name: str, description: str = "") -> int | None:
+    def add_task(self, list_id: int, name: str, description: str = "") -> Optional[int]:
         if list_id not in self.lists:
             return None
         task_id = self._next_task_id
@@ -94,7 +99,7 @@ class TaskManager(BaseModel):
         self.lists[target_list_id].task_ids.append(task_id)
         return True
 
-    def get_list_tasks(self, list_id: int) -> dict[int, Task] | None:
+    def get_list_tasks(self, list_id: int) -> Optional[dict[int, Task]]:
         if list_id not in self.lists:
             return None
         return {tid: self.tasks[tid] for tid in self.lists[list_id].task_ids}
@@ -142,3 +147,111 @@ class TaskManager(BaseModel):
                 if task.description:
                     print(f"       - {task.description}")
         print()
+
+# Users 
+
+class User(BaseModel):
+    login: str
+    password: str
+
+class UserLogin(BaseModel):
+    login: str
+    password: str
+
+class UserPasswordChange(BaseModel):
+    login: str
+    old_password: str
+    new_password: str
+
+class UserDelete(BaseModel):
+    login: str
+    password: str
+
+class UserManager(BaseModel):
+    users: dict[str, str] = Field(default_factory=dict)
+    filepath: str = "json/users.json"
+
+    model_config = {"arbitrary_types_allowed": True}
+
+    @model_validator(mode="after")
+    def _load_users(self):
+        try:
+            with open(self.filepath) as f:
+                self.users = json.load(f)
+        except FileNotFoundError:
+            raise FileNotFoundError(f"File '{self.filepath}' does not exist. Make sure its present.")
+        return self
+
+    def register_user(self, login, password) -> bool:
+        try:
+            user_data = User(login=login, password=password)
+        except ValueError as e:
+            print(f"Invalid input: {e}")
+            return False
+        
+        if user_data.login in self.users:
+            print("Login is already taken, choose a different one")
+            return False
+        self.users[user_data.login] = hash_password(user_data.password)
+        with open(self.filepath, "w") as f:
+            json.dump(self.users, f, indent=2)
+        print(f"Successfully registered, welcome {user_data.login}!")
+        return True
+
+    def login_user(self, login, password) -> bool:
+        try:
+            user_data = UserLogin(login=login, password=password)
+        except ValueError as e:
+            print(f"Invalid input: {e}")
+            return False
+        
+        if user_data.login not in self.users:
+            print(f"{user_data.login} is not registered yet")
+            return False
+        if not verify_password(user_data.password, self.users[user_data.login]):
+            print("Wrong password")
+            return False
+        print(f"Successfully logged in, welcome back {user_data.login}!")
+        return True
+
+    def change_password(self, login, old_password, new_password) -> bool:
+        try:
+            user_data = UserPasswordChange(login=login, old_password=old_password, new_password=new_password)
+        except ValueError as e:
+            print(f"Invalid input: {e}")
+            return False
+        
+        if user_data.login not in self.users:
+            print(f"{user_data.login} is not registered yet")
+            return False
+        if not verify_password(user_data.old_password, self.users[user_data.login]):
+            print("Old password does not match")
+            return False
+        self.users[user_data.login] = hash_password(user_data.new_password)
+        with open(self.filepath, "w") as f:
+            json.dump(self.users, f, indent=2)
+        print("Password changed successfully!")
+        return True
+
+    def delete_account(self, login, password) -> bool:
+        try:
+            user_data = UserDelete(login=login, password=password)
+        except ValueError as e:
+            print(f"Invalid input: {e}")
+            return False
+        
+        if user_data.login not in self.users:
+            print(f"{user_data.login} is not registered yet")
+            return False
+        if not verify_password(user_data.password, self.users[user_data.login]):
+            print("Wrong password")
+            return False
+        del self.users[user_data.login]
+        with open(self.filepath, "w") as f:
+            json.dump(self.users, f, indent=2)
+        print(f"Account {user_data.login} has been deleted successfully")
+        return True
+
+
+# For backward compatibility
+Users = UserManager

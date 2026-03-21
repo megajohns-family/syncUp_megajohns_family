@@ -1,0 +1,46 @@
+{
+  "lists": {
+    "1": {
+      "name": "To Do",
+      "task_ids": [
+        1,
+        4
+      ]
+    },
+    "2": {
+      "name": "Doing",
+      "task_ids": [
+        2
+      ]
+    },
+    "3": {
+      "name": "Done",
+      "task_ids": [
+        5,
+        3
+      ]
+    }
+  },
+  "tasks": {
+    "1": {
+      "name": "Buy groceries",
+      "description": "Milk, bread, eggs"
+    },
+    "2": {
+      "name": "Do Python homework",
+      "description": "Chapter 4 exercises and quiz prep"
+    },
+    "3": {
+      "name": "Fix login bug",
+      "description": "Users getting 401 on valid credentials — check JWT expiry logic"
+    },
+    "4": {
+      "name": "Plan weekend trip",
+      "description": "Look into camping spots near the lake"
+    },
+    "5": {
+      "name": "Set up repo",
+      "description": "Created GitHub org and invited family members"
+    }
+  }
+}

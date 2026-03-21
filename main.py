@@ -1,4 +1,16 @@
+from contextlib import asynccontextmanager
 from app.models import TaskManager
+from app.database import *
+from fastapi import FastAPI
+
+init_db()
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    init_db()
+    yield
+
+app = FastAPI(lifespan=lifespan)
 
 manager = TaskManager()
 
@@ -16,5 +28,8 @@ manager.change_task_description(t3, "Users getting 401 on valid credentials — 
 
 manager.move_task(t2, doing)
 manager.move_task(t3, done)
+manager.save_to_json("app/json_files/tasks.json")
+# manager.pull_from_db("tasks.json")
+# manager = TaskManager.load_from_json("app/json_files/tasks.json")   
+# manager.display()
 
-manager.display()

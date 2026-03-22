@@ -1,5 +1,5 @@
 import json
-from app.database import get_db
+from app.database import get_db, push_to_db, pull_from_db
 from pydantic import BaseModel, model_validator, Field
 from pathlib import Path
 
@@ -8,10 +8,43 @@ from pathlib import Path
 users = Path("app/json_files/users.json")
 tasks = Path("app/json_files/tasks.json")
 
+
+def save_to_json(model: "TaskManager | UserManager", path: Path) -> None:
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(model.model_dump(mode="json"), f, ensure_ascii=False, indent=2)
+
+    
+def load_from_json(cls: "type[TaskManager] | type[UserManager]", path: Path) -> "TaskManager | UserManager":
+    with open(path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    
+    if cls is TaskManager:
+        data["lists"] = {int(k): v for k, v in data.get("lists", {}).items()}
+        data["tasks"] = {int(k): v for k, v in data.get("tasks", {}).items()}
+        for lst in data["lists"].values():
+            lst["task_ids"] = [int(tid) for tid in lst.get("task_ids", [])]
+    
+    return cls.model_validate(data)
+
+from enum import Enum
+from typing import Optional
+import json
+from .hash import hash_password, verify_password
+
+class ColorTags(Enum):
+    NOTHING = 1
+    GREEN = 2
+    RED = 3
+    YELLOW = 4
+    BLUE = 5
+    PURPLE = 6
+
+# Tasks and lists
+
 class Task(BaseModel):
     name: str
     description: str = ""
-
+    color_tag: ColorTags = ColorTags.NOTHING
 
 class TaskList(BaseModel):
     name: str
@@ -35,8 +68,8 @@ class TaskManager(BaseModel):
         list_id = self._next_list_id
         self.lists[list_id] = TaskList(name=name)
         self._next_list_id += 1
-        self.save_to_json(tasks)
-        self.push_to_db("tasks.json")
+        save_to_json(self, tasks)
+        push_to_db("tasks.json")
         return list_id
         
 
@@ -46,30 +79,30 @@ class TaskManager(BaseModel):
         for task_id in self.lists[list_id].task_ids:
             del self.tasks[task_id]
         del self.lists[list_id]
-        self.save_to_json(tasks)
-        self.push_to_db("tasks.json")
+        save_to_json(self, tasks)
+        push_to_db("tasks.json")
         return True
 
     def rename_list(self, list_id: int, new_name: str) -> bool:
         if list_id not in self.lists:
             return False
         self.lists[list_id].name = new_name
-        self.save_to_json(tasks)
-        self.push_to_db("tasks.json")
+        save_to_json(self, tasks)
+        push_to_db("tasks.json")
         return True
 
-    def _find_list_of_task(self, task_id: int) -> int | None:
+    def _find_list_of_task(self, task_id: int) -> Optional[int]:
         return next((lid for lid, lst in self.lists.items() if task_id in lst.task_ids), None)
 
-    def add_task(self, list_id: int, name: str, description: str = "") -> int | None:
+    def add_task(self, list_id: int, name: str, description: str = "") -> Optional[int]:
         if list_id not in self.lists:
             return None
         task_id = self._next_task_id
         self.tasks[task_id] = Task(name=name, description=description)
         self.lists[list_id].task_ids.append(task_id)
         self._next_task_id += 1
-        self.save_to_json(tasks)
-        self.push_to_db("tasks.json")
+        save_to_json(self, tasks)
+        push_to_db("tasks.json")
         return task_id
 
     def remove_task(self, task_id: int) -> bool:
@@ -78,24 +111,24 @@ class TaskManager(BaseModel):
         list_id = self._find_list_of_task(task_id)
         self.lists[list_id].task_ids.remove(task_id)
         del self.tasks[task_id]
-        self.save_to_json(tasks)
-        self.push_to_db("tasks.json")
+        save_to_json(self, tasks)
+        push_to_db("tasks.json")
         return True
 
     def change_task_name(self, task_id: int, new_name: str) -> bool:
         if task_id not in self.tasks:
             return False
         self.tasks[task_id].name = new_name
-        self.save_to_json(tasks)
-        self.push_to_db("tasks.json")
+        save_to_json(self, tasks)
+        push_to_db("tasks.json")
         return True
 
     def change_task_description(self, task_id: int, new_description: str) -> bool:
         if task_id not in self.tasks:
             return False
         self.tasks[task_id].description = new_description
-        self.save_to_json(tasks)
-        self.push_to_db("tasks.json")
+        save_to_json(self, tasks)
+        push_to_db("tasks.json")
         return True
 
     def move_task(self, task_id: int, target_list_id: int) -> bool:
@@ -106,14 +139,41 @@ class TaskManager(BaseModel):
             return True
         self.lists[source_list_id].task_ids.remove(task_id)
         self.lists[target_list_id].task_ids.append(task_id)
-        self.save_to_json(tasks)
-        self.push_to_db("tasks.json")
+        save_to_json(self, tasks)
+        push_to_db("tasks.json")
         return True
 
-    def get_list_tasks(self, list_id: int) -> dict[int, Task] | None:
+    def get_list_tasks(self, list_id: int) -> Optional[dict[int, Task]]:
         if list_id not in self.lists:
             return None
         return {tid: self.tasks[tid] for tid in self.lists[list_id].task_ids}
+    
+    def add_color_tag(self, task_id: int, color_tag: ColorTags) -> bool:
+        if task_id not in self.tasks:
+            return False
+        elif self.tasks[task_id].color_tag != ColorTags.NOTHING:
+            return False
+        self.tasks[task_id].color_tag = color_tag
+        save_to_json(self, tasks)
+        push_to_db("tasks.json")
+        return True
+    
+    def remove_color_tag(self, task_id: int) -> bool:
+        if task_id not in self.tasks:
+            return False
+        elif self.tasks[task_id].color_tag == ColorTags.NOTHING:
+            return False
+        self.tasks[task_id].color_tag = ColorTags.NOTHING
+        save_to_json(self,tasks)
+        push_to_db("tasks.json")
+
+    def change_color_tag(self, task_id: int, color_tag: ColorTags) -> bool:
+        if task_id not in self.tasks:
+            return False
+        self.tasks[task_id].color_tag = color_tag
+        save_to_json(self, tasks)
+        push_to_db("tasks.json")
+        return True
 
     def get_all(self) -> dict:
         return {
@@ -131,87 +191,113 @@ class TaskManager(BaseModel):
             if not tsks:
                 print("  (empty)")
             for task_id, task in tsks.items():
-                print(f"  #{task_id}  {task.name}")
+                color = f" [{task.color_tag.name}]" if task.color_tag != ColorTags.NOTHING else ""
+                print(f"  #{task_id}  {task.name}{color}")
                 if task.description:
                     print(f"       - {task.description}")
                     print()
 
-    def save_to_json(self, path: str) -> None:
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(self.model_dump(), f, ensure_ascii=False, indent=2)
+# Users 
 
-    @classmethod
-    def load_from_json(cls, path: str) -> "TaskManager":
-        with open(path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        data["lists"] = {int(k): v for k, v in data.get("lists", {}).items()}
-        data["tasks"] = {int(k): v for k, v in data.get("tasks", {}).items()}
-        for lst in data["lists"].values():
-            lst["task_ids"] = [int(tid) for tid in lst.get("task_ids", [])]
-        return cls.model_validate(data)
+class User(BaseModel):
+    login: str
+    password: str
 
-    def push_to_db(self, filename: str) -> None:
-        if filename == "tasks.json":
-            path = tasks
-        elif filename == "users.json":
-            path = users
-        else:
-            print("File not found")
-            return
+class UserLogin(BaseModel):
+    login: str
+    password: str
 
-        with open(path, "r", encoding="utf-8") as f:
-            data = json.load(f)
+class UserPasswordChange(BaseModel):
+    login: str
+    old_password: str
+    new_password: str
 
-        with get_db() as db:
-            if filename == "tasks.json":
-                db.execute(
-                    "INSERT OR REPLACE INTO tasks(file_name, file_data) VALUES (?, ?)",
-                    (filename, json.dumps(data, ensure_ascii=False))
-                )
-                db.commit()
-            elif filename == "users.json":
-                db.execute(
-                    "INSERT OR REPLACE INTO users(file_name, file_data) VALUES (?, ?)",
-                    (filename, json.dumps(data, ensure_ascii=False))
-                )
-                db.commit()
+class UserDelete(BaseModel):
+    login: str
+    password: str
 
-    def pull_from_db(self, filename: str) -> None:
-        with get_db() as db:
-            if filename == "tasks.json":
-                row = db.execute(
-                    "SELECT file_data FROM tasks WHERE file_name = ?",
-                    (filename,)
-                ).fetchone()
+class UserManager(BaseModel):
+    users: dict[str, str] = Field(default_factory=dict)
 
-                if row is None:
-                    print(f"There is no data for {filename} in database")
-                    return
+    model_config = {"arbitrary_types_allowed": True}
 
-                data = json.loads(row["file_data"])
+    def register_user(self, login, password) -> bool:
+        try:
+            user_data = User(login=login, password=password)
+        except ValueError as e:
+            print(f"Invalid input: {e}")
+            return False
+        
+        if user_data.login in self.users:
+            print("Login is already taken, choose a different one")
+            return False
+        self.users[user_data.login] = hash_password(user_data.password)
+        save_to_json(self, users)
+        print(f"Successfully registered, welcome {user_data.login}!")
+        push_to_db("users.json")
+        return True
 
-                with open(tasks, "w", encoding="utf-8") as f:
-                    json.dump(data, f, ensure_ascii=False, indent=2)
+    def login_user(self, login, password) -> bool:
+        try:
+            user_data = UserLogin(login=login, password=password)
+        except ValueError as e:
+            print(f"Invalid input: {e}")
+            return False
+        
+        if user_data.login not in self.users:
+            print(f"{user_data.login} is not registered yet")
+            # Auto redirect to register
+            return False
+        
+        if not verify_password(user_data.password, self.users[user_data.login]):
+            print("Wrong password")
+            return False
+        
+        print(f"Successfully logged in, welcome back {user_data.login}!")
+        return True
 
-            elif filename == "users.json":
-                row = db.execute(
-                    "SELECT users_file_data FROM users WHERE users_file_name = ?",
-                    (filename,)
-                ).fetchone()
+    def change_password(self, login, old_password, new_password) -> bool:
+        try:
+            user_data = UserPasswordChange(login=login, old_password=old_password, new_password=new_password)
+        except ValueError as e:
+            print(f"Invalid input: {e}")
+            return False
+        
+        if user_data.login not in self.users:
+            print(f"{user_data.login} is not registered yet")
+            return False
+        
+        if not verify_password(user_data.old_password, self.users[user_data.login]):
+            print("Old password does not match")
+            return False
+        
+        self.users[user_data.login] = hash_password(user_data.new_password)
+        save_to_json(self, users)
+        print("Password changed successfully!")
+        push_to_db("users.json")
+        return True
 
-                if row is None:
-                    print(f"There is no data for {filename} in database")
-                    return
+    def delete_account(self, login, password) -> bool:
+        try:
+            user_data = UserDelete(login=login, password=password)
+        except ValueError as e:
+            print(f"Invalid input: {e}")
+            return False
+        
+        if user_data.login not in self.users:
+            print(f"{user_data.login} is not registered yet")
+            return False
+        
+        if not verify_password(user_data.password, self.users[user_data.login]):
+            print("Wrong password")
+            return False
+        
+        del self.users[user_data.login]
+        save_to_json(self, users)
+        print(f"Account {user_data.login} has been deleted successfully")
+        push_to_db("users.json")
+        return True
 
-                data = json.loads(row["users_file_data"])
 
-                with open(users, "w", encoding="utf-8") as f:
-                    json.dump(data, f, ensure_ascii=False, indent=2)
-
-            else:
-                print(f"Nieznany plik: {filename}")
-
-    # class ValidUsers(BaseModel):
-    #     #Add validanion here
-    #     pass
-                
+# For backward compatibility
+Users = UserManager

@@ -24,6 +24,7 @@ https://trello.com/b/v7kFewCk/syncup-project
 - Move tasks between lists
 - Each list is a status
 ## Project structure
+```
 SyncUp/
 ├── app/
 │   ├── json_files/
@@ -37,3 +38,4 @@ SyncUp/
 ├── readme.md
 ├── requirements.txt
 └── syncup_db.db
+```

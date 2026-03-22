@@ -23,3 +23,17 @@ https://trello.com/b/v7kFewCk/syncup-project
 - Add/remove/change tasks lists
 - Move tasks between lists
 - Each list is a status
+## Project structure
+SyncUp/
+├── app/
+│   ├── json_files/
+│   │   ├── users.json
+│   │   └── tasks.json
+│   ├── database.py
+│   ├── hash.py
+│   └── models.py
+├── .gitignore
+├── main.py
+├── readme.md
+├── requirements.txt
+└── syncup_db.db

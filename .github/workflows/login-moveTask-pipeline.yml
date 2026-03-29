@@ -1,0 +1,79 @@
+name: Login and Perform Action
+ 
+on:
+  workflow_dispatch:
+    inputs:
+      username:
+        description: "Username"
+        required: true
+        type: string
+      password:
+        description: "Password"
+        required: true
+        type: string
+      task_id:
+        description: "Task ID to move"
+        required: true
+        type: string
+      target_list_id:
+        description: "Target list ID"
+        required: true
+        type: string
+      action:
+        description: "Action to perform after login"
+        required: true
+        type: choice
+        options:
+          - move_task
+ 
+jobs:
+  login-and-act:
+    runs-on: ubuntu-latest
+ 
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+ 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+ 
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+ 
+      - name: Login and perform action
+        env:
+          USERNAME: ${{ github.event.inputs.username }}
+          PASSWORD: ${{ github.event.inputs.password }}
+          ACTION: ${{ github.event.inputs.action }}
+          TASK_ID: ${{ github.event.inputs.task_id }}
+          TARGET_LIST_ID: ${{ github.event.inputs.target_list_id }}
+        run: |
+          python - <<'EOF'
+          import os
+          from app.models import UserManager, TaskManager, load_from_json
+          from pathlib import Path
+      
+          username = os.environ["USERNAME"]
+          password = os.environ["PASSWORD"]
+          action = os.environ["ACTION"]
+          task_id = int(os.environ["TASK_ID"])
+          target_list_id = int(os.environ["TARGET_LIST_ID"])
+      
+          um = load_from_json(UserManager, Path("app/json_files/users.json"))
+      
+          if not um.login_user(username, password):
+              print("❌ Login failed")
+              exit(1)
+      
+          print(f"✅ Logged in as: {username}")
+          
+          tm = load_from_json(TaskManager, Path("app/json_files/tasks.json"))
+
+          if action == "move_task":
+              success = tm.move_task(task_id, target_list_id)
+              print(f"✅ Task {task_id} moved to list {target_list_id}" if success else "❌ Move failed — wrong task_id or list_id")
+      
+      
+          EOF

@@ -4,23 +4,26 @@ from pydantic import BaseModel, model_validator, Field
 from app.database import save_to_firestore, load_from_firestore_raw
 from .hash import hash_password, verify_password
 
+# FIX: old int -> str
+class ColorTags(str, Enum):
+    NOTHING = "NOTHING"
+    GREEN = "GREEN"
+    RED = "RED"
+    YELLOW = "YELLOW"
+    BLUE = "BLUE"
+    PURPLE = "PURPLE"
 
-class ColorTags(Enum):
-    NOTHING = 1
-    GREEN = 2
-    RED = 3
-    YELLOW = 4
-    BLUE = 5
-    PURPLE = 6
 
 class Task(BaseModel):
     name: str
     description: str = ""
     color_tag: ColorTags = ColorTags.NOTHING
 
+
 class TaskList(BaseModel):
     name: str
     task_ids: list[int] = Field(default_factory=list)
+
 
 class TaskManager(BaseModel):
     user_id: str = ""
@@ -162,33 +165,35 @@ class TaskManager(BaseModel):
                     print(f"       - {task.description}")
                     print()
 
-        
     def get_lists(self):
         return self.lists
-    
+
     def get_listid_by_name(self, name: str) -> Optional[int]:
         return next((lid for lid, lst in self.lists.items() if lst.name == name), None)
 
 
-
-# Users
+# ---------------- USERS ----------------
 
 class User(BaseModel):
     login: str
     password: str
 
+
 class UserLogin(BaseModel):
     login: str
     password: str
+
 
 class UserPasswordChange(BaseModel):
     login: str
     old_password: str
     new_password: str
 
+
 class UserDelete(BaseModel):
     login: str
     password: str
+
 
 class UserManager(BaseModel):
     users: dict[str, str] = Field(default_factory=dict)
@@ -201,99 +206,122 @@ class UserManager(BaseModel):
     def register_user(self, login, password) -> bool:
         try:
             user_data = User(login=login, password=password)
-        except ValueError as e:
-            print(f"Invalid input: {e}")
+        except ValueError:
             return False
 
         if user_data.login in self.users:
-            print("Login is already taken, choose a different one")
             return False
+
         self.users[user_data.login] = hash_password(user_data.password)
         self._save()
-        print(f"Successfully registered, welcome {user_data.login}!")
         return True
 
     def login_user(self, login, password) -> bool:
         try:
             user_data = UserLogin(login=login, password=password)
-        except ValueError as e:
-            print(f"Invalid input: {e}")
+        except ValueError:
             return False
 
         if user_data.login not in self.users:
-            print(f"{user_data.login} is not registered yet")
             return False
 
         if not verify_password(user_data.password, self.users[user_data.login]):
-            print("Wrong password")
             return False
 
-        print(f"Successfully logged in, welcome back {user_data.login}!")
         return True
 
     def change_password(self, login, old_password, new_password) -> bool:
         try:
             user_data = UserPasswordChange(login=login, old_password=old_password, new_password=new_password)
-        except ValueError as e:
-            print(f"Invalid input: {e}")
+        except ValueError:
             return False
 
         if user_data.login not in self.users:
-            print(f"{user_data.login} is not registered yet")
             return False
 
         if not verify_password(user_data.old_password, self.users[user_data.login]):
-            print("Old password does not match")
             return False
 
         self.users[user_data.login] = hash_password(user_data.new_password)
         self._save()
-        print("Password changed successfully!")
         return True
 
     def delete_account(self, login, password) -> bool:
         try:
             user_data = UserDelete(login=login, password=password)
-        except ValueError as e:
-            print(f"Invalid input: {e}")
+        except ValueError:
             return False
 
         if user_data.login not in self.users:
-            print(f"{user_data.login} is not registered yet")
             return False
 
         if not verify_password(user_data.password, self.users[user_data.login]):
-            print("Wrong password")
             return False
 
         del self.users[user_data.login]
         self._save()
-        print(f"Account {user_data.login} has been deleted successfully")
         return True
 
 
-def load_from_firestore(cls: "type[TaskManager] | type[UserManager]") -> "TaskManager | UserManager":
+# ---------------- LOADERS ----------------
+
+def load_from_firestore(cls):
     doc_id = "tasks" if cls is TaskManager else "users"
     data = load_from_firestore_raw(doc_id)
+
     if data is None:
         return cls()
+
     if cls is TaskManager:
         data["lists"] = {int(k): v for k, v in data.get("lists", {}).items()}
         data["tasks"] = {int(k): v for k, v in data.get("tasks", {}).items()}
+
+        # FIX: old int -> string
+        for task in data["tasks"].values():
+            if isinstance(task.get("color_tag"), int):
+                mapping = {
+                    1: "NOTHING",
+                    2: "GREEN",
+                    3: "RED",
+                    4: "YELLOW",
+                    5: "BLUE",
+                    6: "PURPLE"
+                }
+                task["color_tag"] = mapping.get(task["color_tag"], "NOTHING")
+
         for lst in data["lists"].values():
             lst["task_ids"] = [int(tid) for tid in lst.get("task_ids", [])]
+
     return cls.model_validate(data)
 
 
 def load_task_manager(username: str) -> TaskManager:
     data = load_from_firestore_raw(f"tasks_{username}")
+
     if data is None:
         return TaskManager(user_id=username)
+
     data["lists"] = {int(k): v for k, v in data.get("lists", {}).items()}
     data["tasks"] = {int(k): v for k, v in data.get("tasks", {}).items()}
+
+    # FIX: old int -> string
+    for task in data["tasks"].values():
+        if isinstance(task.get("color_tag"), int):
+            mapping = {
+                1: "NOTHING",
+                2: "GREEN",
+                3: "RED",
+                4: "YELLOW",
+                5: "BLUE",
+                6: "PURPLE"
+            }
+            task["color_tag"] = mapping.get(task["color_tag"], "NOTHING")
+
     for lst in data["lists"].values():
         lst["task_ids"] = [int(tid) for tid in lst.get("task_ids", [])]
+
     data["user_id"] = username
+
     return TaskManager.model_validate(data)
 
 

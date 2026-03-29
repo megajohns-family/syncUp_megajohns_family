@@ -9,3 +9,4 @@ env/
 *.db
 serviceAccountKey.json
 .env
+.DS_Store

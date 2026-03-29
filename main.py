@@ -63,7 +63,7 @@ class TaskCreateRequest(BaseModel):
 class TaskUpdateRequest(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
-    color_tag: Optional[ColorTags] = None
+    color_tag: Optional[str] = None  # accepted as enum name string e.g. "GREEN"
 
 class TaskMoveRequest(BaseModel):
     target_list_id: int
@@ -111,7 +111,21 @@ def delete_account(body: UserCredentials, username: str = Depends(get_current_us
 @app.get("/lists")
 def get_lists(username: str = Depends(get_current_user)):
     manager = load_task_manager(username)
-    return manager.get_all()
+    raw = manager.get_all()
+    return {
+        list_id: {
+            "name": data["name"],
+            "tasks": {
+                tid: {
+                    "name": task.name,
+                    "description": task.description,
+                    "color_tag": task.color_tag.name,
+                }
+                for tid, task in data["tasks"].items()
+            },
+        }
+        for list_id, data in raw.items()
+    }
 
 
 @app.post("/lists", status_code=201)
@@ -160,7 +174,11 @@ def update_task(task_id: int, body: TaskUpdateRequest, username: str = Depends(g
     if body.description is not None:
         manager.change_task_description(task_id, body.description)
     if body.color_tag is not None:
-        manager.change_color_tag(task_id, body.color_tag)
+        try:
+            color = ColorTags[body.color_tag.upper()]
+        except KeyError:
+            raise HTTPException(status_code=400, detail=f"Invalid color tag: {body.color_tag}")
+        manager.change_color_tag(task_id, color)
     return {"message": "Task updated"}
 
 

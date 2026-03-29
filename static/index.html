@@ -134,7 +134,25 @@
       letter-spacing: 1px;
       color: #ccc;
       text-transform: uppercase;
+      cursor: pointer;
     }
+
+    .list-name:hover { color: #fff; text-decoration: underline; text-underline-offset: 3px; }
+
+    /* List inline edit */
+    .list-edit-form { display: flex; gap: 6px; align-items: center; flex: 1; }
+    .list-edit-form input {
+      flex: 1;
+      background: #111;
+      border: 1px solid #555;
+      color: #e0e0e0;
+      padding: 4px 8px;
+      font-family: monospace;
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    .list-edit-form input:focus { outline: none; border-color: #888; }
 
     .task-item {
       display: flex;
@@ -147,16 +165,18 @@
 
     .task-item:last-of-type { border-bottom: none; }
 
-    .task-text { flex: 1; }
+    /* Color dot in top-right corner of task text area */
+    .task-text { flex: 1; position: relative; padding-right: 14px; }
     .task-name { font-size: 0.85rem; color: #ddd; }
     .task-desc { font-size: 0.75rem; color: #666; margin-top: 2px; }
 
     .color-dot {
+      position: absolute;
+      top: 2px;
+      right: 2px;
       width: 8px;
       height: 8px;
       border-radius: 50%;
-      flex-shrink: 0;
-      margin-top: 5px;
     }
 
     .color-NOTHING { background: transparent; border: 1px solid #333; }
@@ -165,6 +185,53 @@
     .color-YELLOW  { background: #8a7a3a; }
     .color-BLUE    { background: #3a5a8a; }
     .color-PURPLE  { background: #6a4a8a; }
+
+    /* Task actions */
+    .task-actions { display: flex; gap: 4px; flex-shrink: 0; }
+
+    /* Task inline edit */
+    .task-edit-wrap {
+      padding: 8px 0;
+      border-bottom: 1px solid #222;
+    }
+    .task-edit-wrap input {
+      display: block;
+      width: 100%;
+      background: #111;
+      border: 1px solid #333;
+      color: #e0e0e0;
+      padding: 5px 8px;
+      font-family: monospace;
+      font-size: 0.8rem;
+      margin-bottom: 5px;
+    }
+    .task-edit-wrap input:focus { outline: none; border-color: #555; }
+
+    /* Color swatches */
+    .color-swatches {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 6px;
+      align-items: center;
+    }
+    .color-swatch {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      cursor: pointer;
+      border: 2px solid transparent;
+      flex-shrink: 0;
+    }
+    .color-swatch.selected { border-color: #ddd; }
+    .swatch-NOTHING { background: #2a2a2a; }
+    .swatch-NOTHING.selected { border-color: #888; }
+    .swatch-GREEN  { background: #4a8a4a; }
+    .swatch-RED    { background: #8a4a4a; }
+    .swatch-YELLOW { background: #8a7a3a; }
+    .swatch-BLUE   { background: #3a5a8a; }
+    .swatch-PURPLE { background: #6a4a8a; }
+
+    .edit-actions { display: flex; gap: 5px; }
 
     /* New task form */
     .new-task-form {
@@ -250,6 +317,10 @@
   const setAuth  = (token, user) => { localStorage.setItem('token', token); localStorage.setItem('username', user); };
   const clearAuth = () => { localStorage.removeItem('token'); localStorage.removeItem('username'); };
 
+  // ---- Data maps — populated on render, used by edit functions ----
+  const listDataMap = {};  // listId -> { name }
+  const taskDataMap = {};  // taskId -> { name, description, color_tag, listId }
+
   // ---- Init ----
   window.onload = () => {
     if (getToken()) showApp();
@@ -313,7 +384,6 @@
       });
       if (!res.ok) { msg('reg-msg', (await res.json()).detail); return; }
       msg('reg-msg', 'Registered! Logging in...', false);
-      // auto-login
       const res2 = await fetch(`${API}/users/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -348,11 +418,32 @@
     renderLists(data);
   }
 
+  // Returns the inner HTML string for a single task item (view mode)
+  function makeTaskHTML(tid, task) {
+    const color = task.color_tag ?? 'NOTHING';
+    return `
+      <div class="task-item" id="task-${tid}">
+        <div class="task-text">
+          <div class="task-name">${esc(task.name)}</div>
+          ${task.description ? `<div class="task-desc">${esc(task.description)}</div>` : ''}
+          <div class="color-dot color-${color}"></div>
+        </div>
+        <div class="task-actions">
+          <button class="btn small" onclick="editTask(${tid})" title="Edit">✎</button>
+          <button class="btn small danger" onclick="deleteTask(${tid})">✕</button>
+        </div>
+      </div>
+    `;
+  }
+
   function renderLists(data) {
     const grid = document.getElementById('lists-grid');
     grid.innerHTML = '';
 
-    // data is { "1": { name, tasks: { "1": {name, description, color_tag} } }, ... }
+    // Reset data maps
+    Object.keys(listDataMap).forEach(k => delete listDataMap[k]);
+    Object.keys(taskDataMap).forEach(k => delete taskDataMap[k]);
+
     const entries = Object.entries(data);
     if (entries.length === 0) {
       grid.innerHTML = '<div class="empty">No lists yet. Create one above.</div>';
@@ -360,25 +451,22 @@
     }
 
     for (const [listId, list] of entries) {
+      listDataMap[listId] = { name: list.name };
+
       const card = document.createElement('div');
       card.className = 'list-card';
       card.id = `list-${listId}`;
 
       const tasks = list.tasks ? Object.entries(list.tasks) : [];
-      const taskRows = tasks.map(([tid, task]) => `
-        <div class="task-item" id="task-${tid}">
-          <div class="color-dot color-${task.color_tag ?? 'NOTHING'}"></div>
-          <div class="task-text">
-            <div class="task-name">${esc(task.name)}</div>
-            ${task.description ? `<div class="task-desc">${esc(task.description)}</div>` : ''}
-          </div>
-          <button class="btn small danger" onclick="deleteTask(${tid}, ${listId})">✕</button>
-        </div>
-      `).join('');
+      for (const [tid, task] of tasks) {
+        taskDataMap[tid] = { name: task.name, description: task.description || '', color_tag: task.color_tag ?? 'NOTHING' };
+      }
+
+      const taskRows = tasks.map(([tid, task]) => makeTaskHTML(tid, task)).join('');
 
       card.innerHTML = `
-        <div class="list-header">
-          <span class="list-name">${esc(list.name)}</span>
+        <div class="list-header" id="list-header-${listId}">
+          <span class="list-name" onclick="editListName(${listId})" title="Click to rename">${esc(list.name)}</span>
           <button class="btn small danger" onclick="deleteList(${listId})">✕</button>
         </div>
         ${tasks.length === 0 ? '<div class="empty">empty</div>' : taskRows}
@@ -397,6 +485,115 @@
     }
   }
 
+  // ---- List name editing ----
+  function editListName(listId) {
+    const header = document.getElementById(`list-header-${listId}`);
+    const currentName = listDataMap[listId].name;
+
+    header.innerHTML = `
+      <div class="list-edit-form">
+        <input type="text" id="list-edit-input-${listId}" value="${esc(currentName)}" />
+        <button class="btn small primary" onclick="saveListName(${listId})">✓</button>
+        <button class="btn small" onclick="cancelListEdit(${listId})">✕</button>
+      </div>
+    `;
+
+    const input = document.getElementById(`list-edit-input-${listId}`);
+    input.focus();
+    input.select();
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter') saveListName(listId);
+      if (e.key === 'Escape') cancelListEdit(listId);
+    });
+  }
+
+  async function saveListName(listId) {
+    const input = document.getElementById(`list-edit-input-${listId}`);
+    const newName = input.value.trim();
+    if (!newName) { cancelListEdit(listId); return; }
+
+    const res = await apiFetch(`/lists/${listId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ name: newName })
+    });
+    if (res && res.ok) {
+      listDataMap[listId].name = newName;
+    }
+    cancelListEdit(listId);
+  }
+
+  function cancelListEdit(listId) {
+    const header = document.getElementById(`list-header-${listId}`);
+    const name = listDataMap[listId].name;
+    header.innerHTML = `
+      <span class="list-name" onclick="editListName(${listId})" title="Click to rename">${esc(name)}</span>
+      <button class="btn small danger" onclick="deleteList(${listId})">✕</button>
+    `;
+  }
+
+  // ---- Task editing ----
+  const COLORS = ['NOTHING', 'GREEN', 'RED', 'YELLOW', 'BLUE', 'PURPLE'];
+
+  function editTask(taskId) {
+    const task = taskDataMap[taskId];
+    const item = document.getElementById(`task-${taskId}`);
+
+    const swatches = COLORS.map(c => `
+      <div class="color-swatch swatch-${c}${task.color_tag === c ? ' selected' : ''}"
+           onclick="selectSwatch(${taskId}, '${c}')" title="${c.charAt(0) + c.slice(1).toLowerCase()}"></div>
+    `).join('');
+
+    item.outerHTML = `
+      <div class="task-edit-wrap" id="task-${taskId}">
+        <input type="text" id="task-edit-name-${taskId}" value="${esc(task.name)}" placeholder="task name" />
+        <input type="text" id="task-edit-desc-${taskId}" value="${esc(task.description)}" placeholder="description (optional)" />
+        <div class="color-swatches" id="swatches-${taskId}">${swatches}</div>
+        <div class="edit-actions">
+          <button class="btn small primary" onclick="saveTask(${taskId})">✓ save</button>
+          <button class="btn small" onclick="cancelTaskEdit(${taskId})">✕ cancel</button>
+        </div>
+      </div>
+    `;
+
+    document.getElementById(`task-edit-name-${taskId}`).focus();
+  }
+
+  function selectSwatch(taskId, color) {
+    taskDataMap[taskId]._editColor = color;
+    const container = document.getElementById(`swatches-${taskId}`);
+    container.querySelectorAll('.color-swatch').forEach(el => el.classList.remove('selected'));
+    container.querySelector(`.swatch-${color}`).classList.add('selected');
+  }
+
+  async function saveTask(taskId) {
+    const task = taskDataMap[taskId];
+    const newName = document.getElementById(`task-edit-name-${taskId}`).value.trim();
+    const newDesc = document.getElementById(`task-edit-desc-${taskId}`).value.trim();
+    const newColor = task._editColor !== undefined ? task._editColor : task.color_tag;
+
+    if (!newName) { cancelTaskEdit(taskId); return; }
+
+    const res = await apiFetch(`/tasks/${taskId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ name: newName, description: newDesc, color_tag: newColor })
+    });
+    if (res && res.ok) {
+      task.name = newName;
+      task.description = newDesc;
+      task.color_tag = newColor;
+    }
+    delete task._editColor;
+    cancelTaskEdit(taskId);
+  }
+
+  function cancelTaskEdit(taskId) {
+    const item = document.getElementById(`task-${taskId}`);
+    const task = taskDataMap[taskId];
+    delete task._editColor;
+    item.outerHTML = makeTaskHTML(taskId, task);
+  }
+
+  // ---- List CRUD ----
   async function createList() {
     const input = document.getElementById('new-list-name');
     const name = input.value.trim();
@@ -414,7 +611,7 @@
     loadLists();
   }
 
-  // ---- Tasks ----
+  // ---- Task CRUD ----
   async function createTask(listId) {
     const nameEl = document.getElementById(`task-name-${listId}`);
     const descEl = document.getElementById(`task-desc-${listId}`);

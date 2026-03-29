@@ -23,6 +23,7 @@ class TaskList(BaseModel):
     task_ids: list[int] = Field(default_factory=list)
 
 class TaskManager(BaseModel):
+    user_id: str = ""
     lists: dict[int, TaskList] = Field(default_factory=dict)
     tasks: dict[int, Task] = Field(default_factory=dict)
     _next_list_id: int = 1
@@ -37,7 +38,8 @@ class TaskManager(BaseModel):
         return self
 
     def _save(self):
-        save_to_firestore("tasks", self.model_dump(mode="json"))
+        doc_id = f"tasks_{self.user_id}" if self.user_id else "tasks"
+        save_to_firestore(doc_id, self.model_dump(mode="json"))
 
     def add_list(self, name: str) -> int:
         list_id = self._next_list_id
@@ -160,6 +162,14 @@ class TaskManager(BaseModel):
                     print(f"       - {task.description}")
                     print()
 
+        
+    def get_lists(self):
+        return self.lists
+    
+    def get_listid_by_name(self, name: str) -> Optional[int]:
+        return next((lid for lid, lst in self.lists.items() if lst.name == name), None)
+
+
 
 # Users
 
@@ -275,5 +285,16 @@ def load_from_firestore(cls: "type[TaskManager] | type[UserManager]") -> "TaskMa
     return cls.model_validate(data)
 
 
-# For backward compatibility
+def load_task_manager(username: str) -> TaskManager:
+    data = load_from_firestore_raw(f"tasks_{username}")
+    if data is None:
+        return TaskManager(user_id=username)
+    data["lists"] = {int(k): v for k, v in data.get("lists", {}).items()}
+    data["tasks"] = {int(k): v for k, v in data.get("tasks", {}).items()}
+    for lst in data["lists"].values():
+        lst["task_ids"] = [int(tid) for tid in lst.get("task_ids", [])]
+    data["user_id"] = username
+    return TaskManager.model_validate(data)
+
+
 Users = UserManager

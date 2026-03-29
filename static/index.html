@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>syncUp</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: monospace;
+      background: #0f0f0f;
+      color: #e0e0e0;
+      min-height: 100vh;
+    }
+
+    /* ---- AUTH ---- */
+    #auth {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      gap: 12px;
+    }
+
+    #auth h1 { font-size: 1.8rem; letter-spacing: 4px; color: #fff; margin-bottom: 8px; }
+
+    .auth-box {
+      background: #1a1a1a;
+      border: 1px solid #333;
+      padding: 28px 32px;
+      width: 320px;
+    }
+
+    .auth-box h2 { font-size: 0.85rem; letter-spacing: 2px; color: #888; margin-bottom: 16px; text-transform: uppercase; }
+
+    .auth-box input {
+      display: block;
+      width: 100%;
+      background: #111;
+      border: 1px solid #333;
+      color: #e0e0e0;
+      padding: 8px 10px;
+      margin-bottom: 10px;
+      font-family: monospace;
+      font-size: 0.9rem;
+    }
+
+    .auth-box input:focus { outline: none; border-color: #555; }
+
+    .btn {
+      background: #222;
+      color: #e0e0e0;
+      border: 1px solid #444;
+      padding: 8px 14px;
+      font-family: monospace;
+      font-size: 0.85rem;
+      cursor: pointer;
+      letter-spacing: 1px;
+    }
+
+    .btn:hover { background: #2e2e2e; border-color: #666; }
+    .btn.primary { border-color: #5a8a5a; color: #8fca8f; }
+    .btn.primary:hover { background: #1e2e1e; }
+    .btn.danger { border-color: #7a3a3a; color: #ca8f8f; }
+    .btn.danger:hover { background: #2e1e1e; }
+    .btn.small { padding: 4px 9px; font-size: 0.78rem; }
+
+    .auth-box .btn { width: 100%; margin-top: 4px; }
+
+    .error { color: #ca8f8f; font-size: 0.8rem; margin-top: 8px; }
+    .success { color: #8fca8f; font-size: 0.8rem; margin-top: 8px; }
+
+    /* ---- APP ---- */
+    #app { display: none; }
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 24px;
+      border-bottom: 1px solid #222;
+      background: #111;
+    }
+
+    header .logo { font-size: 1rem; letter-spacing: 3px; color: #fff; }
+    header .user-info { font-size: 0.8rem; color: #888; }
+    header .user-info span { color: #aaa; }
+
+    .main { padding: 24px; max-width: 960px; margin: 0 auto; }
+
+    /* New list bar */
+    .new-list-bar {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 24px;
+    }
+
+    .new-list-bar input {
+      flex: 1;
+      background: #1a1a1a;
+      border: 1px solid #333;
+      color: #e0e0e0;
+      padding: 8px 10px;
+      font-family: monospace;
+      font-size: 0.85rem;
+    }
+
+    .new-list-bar input:focus { outline: none; border-color: #555; }
+
+    /* Lists */
+    .lists-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 16px;
+    }
+
+    .list-card {
+      background: #1a1a1a;
+      border: 1px solid #2a2a2a;
+      padding: 16px;
+    }
+
+    .list-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+
+    .list-name {
+      font-size: 0.9rem;
+      letter-spacing: 1px;
+      color: #ccc;
+      text-transform: uppercase;
+    }
+
+    .task-item {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      padding: 7px 0;
+      border-bottom: 1px solid #222;
+      gap: 8px;
+    }
+
+    .task-item:last-of-type { border-bottom: none; }
+
+    .task-text { flex: 1; }
+    .task-name { font-size: 0.85rem; color: #ddd; }
+    .task-desc { font-size: 0.75rem; color: #666; margin-top: 2px; }
+
+    .color-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      margin-top: 5px;
+    }
+
+    .color-NOTHING { background: transparent; border: 1px solid #333; }
+    .color-GREEN   { background: #4a8a4a; }
+    .color-RED     { background: #8a4a4a; }
+    .color-YELLOW  { background: #8a7a3a; }
+    .color-BLUE    { background: #3a5a8a; }
+    .color-PURPLE  { background: #6a4a8a; }
+
+    /* New task form */
+    .new-task-form {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      margin-top: 10px;
+    }
+
+    .new-task-form input {
+      background: #111;
+      border: 1px solid #2a2a2a;
+      color: #e0e0e0;
+      padding: 6px 8px;
+      font-family: monospace;
+      font-size: 0.8rem;
+    }
+
+    .new-task-form input:focus { outline: none; border-color: #444; }
+
+    .new-task-form .row { display: flex; gap: 6px; }
+    .new-task-form .row input { flex: 1; }
+
+    .empty { color: #444; font-size: 0.78rem; padding: 6px 0; }
+
+    #loading { text-align: center; color: #555; padding: 40px; font-size: 0.85rem; letter-spacing: 2px; }
+  </style>
+</head>
+<body>
+
+<!-- AUTH SCREEN -->
+<div id="auth">
+  <h1>syncUp</h1>
+
+  <div class="auth-box" id="login-box">
+    <h2>Login</h2>
+    <input type="text" id="login-email" placeholder="email / username" />
+    <input type="password" id="login-password" placeholder="password" />
+    <button class="btn primary" onclick="doLogin()">Login</button>
+    <div id="login-msg"></div>
+    <div style="margin-top:14px; font-size:0.78rem; color:#555;">
+      No account? <button class="btn small" onclick="showRegister()">Register</button>
+    </div>
+  </div>
+
+  <div class="auth-box" id="register-box" style="display:none">
+    <h2>Register</h2>
+    <input type="text" id="reg-email" placeholder="email / username" />
+    <input type="password" id="reg-password" placeholder="password" />
+    <button class="btn primary" onclick="doRegister()">Register</button>
+    <div id="reg-msg"></div>
+    <div style="margin-top:14px; font-size:0.78rem; color:#555;">
+      Already have an account? <button class="btn small" onclick="showLogin()">Login</button>
+    </div>
+  </div>
+</div>
+
+<!-- APP SCREEN -->
+<div id="app">
+  <header>
+    <span class="logo">syncUp</span>
+    <span class="user-info">logged in as <span id="username-label"></span></span>
+    <button class="btn small danger" onclick="logout()">Logout</button>
+  </header>
+
+  <div class="main">
+    <div class="new-list-bar">
+      <input type="text" id="new-list-name" placeholder="new list name..." />
+      <button class="btn primary" onclick="createList()">+ List</button>
+    </div>
+
+    <div id="loading" style="display:none">loading...</div>
+    <div class="lists-grid" id="lists-grid"></div>
+  </div>
+</div>
+
+<script>
+  const API = '';  // same origin
+
+  // ---- Storage ----
+  const getToken = () => localStorage.getItem('token');
+  const getUser  = () => localStorage.getItem('username');
+  const setAuth  = (token, user) => { localStorage.setItem('token', token); localStorage.setItem('username', user); };
+  const clearAuth = () => { localStorage.removeItem('token'); localStorage.removeItem('username'); };
+
+  // ---- Init ----
+  window.onload = () => {
+    if (getToken()) showApp();
+  };
+
+  // ---- Auth UI ----
+  function showRegister() {
+    document.getElementById('login-box').style.display = 'none';
+    document.getElementById('register-box').style.display = '';
+  }
+
+  function showLogin() {
+    document.getElementById('register-box').style.display = 'none';
+    document.getElementById('login-box').style.display = '';
+  }
+
+  function showApp() {
+    document.getElementById('auth').style.display = 'none';
+    document.getElementById('app').style.display = 'block';
+    document.getElementById('username-label').textContent = getUser();
+    loadLists();
+  }
+
+  function logout() {
+    clearAuth();
+    document.getElementById('app').style.display = 'none';
+    document.getElementById('auth').style.display = 'flex';
+  }
+
+  function msg(id, text, isError = true) {
+    const el = document.getElementById(id);
+    el.textContent = text;
+    el.className = isError ? 'error' : 'success';
+  }
+
+  // ---- Auth calls ----
+  async function doLogin() {
+    const login    = document.getElementById('login-email').value.trim();
+    const password = document.getElementById('login-password').value;
+    try {
+      const res = await fetch(`${API}/users/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ login, password })
+      });
+      if (!res.ok) { msg('login-msg', (await res.json()).detail); return; }
+      const { access_token } = await res.json();
+      setAuth(access_token, login);
+      showApp();
+    } catch (e) { msg('login-msg', 'Connection error'); }
+  }
+
+  async function doRegister() {
+    const login    = document.getElementById('reg-email').value.trim();
+    const password = document.getElementById('reg-password').value;
+    try {
+      const res = await fetch(`${API}/users/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ login, password })
+      });
+      if (!res.ok) { msg('reg-msg', (await res.json()).detail); return; }
+      msg('reg-msg', 'Registered! Logging in...', false);
+      // auto-login
+      const res2 = await fetch(`${API}/users/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ login, password })
+      });
+      const { access_token } = await res2.json();
+      setAuth(access_token, login);
+      setTimeout(showApp, 600);
+    } catch (e) { msg('reg-msg', 'Connection error'); }
+  }
+
+  // ---- API helpers ----
+  const authHeaders = () => ({
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${getToken()}`
+  });
+
+  async function apiFetch(path, opts = {}) {
+    const res = await fetch(API + path, { headers: authHeaders(), ...opts });
+    if (res.status === 401) { logout(); return null; }
+    return res;
+  }
+
+  // ---- Lists ----
+  async function loadLists() {
+    document.getElementById('loading').style.display = '';
+    document.getElementById('lists-grid').innerHTML = '';
+    const res = await apiFetch('/lists');
+    document.getElementById('loading').style.display = 'none';
+    if (!res) return;
+    const data = await res.json();
+    renderLists(data);
+  }
+
+  function renderLists(data) {
+    const grid = document.getElementById('lists-grid');
+    grid.innerHTML = '';
+
+    // data is { "1": { name, tasks: { "1": {name, description, color_tag} } }, ... }
+    const entries = Object.entries(data);
+    if (entries.length === 0) {
+      grid.innerHTML = '<div class="empty">No lists yet. Create one above.</div>';
+      return;
+    }
+
+    for (const [listId, list] of entries) {
+      const card = document.createElement('div');
+      card.className = 'list-card';
+      card.id = `list-${listId}`;
+
+      const tasks = list.tasks ? Object.entries(list.tasks) : [];
+      const taskRows = tasks.map(([tid, task]) => `
+        <div class="task-item" id="task-${tid}">
+          <div class="color-dot color-${task.color_tag ?? 'NOTHING'}"></div>
+          <div class="task-text">
+            <div class="task-name">${esc(task.name)}</div>
+            ${task.description ? `<div class="task-desc">${esc(task.description)}</div>` : ''}
+          </div>
+          <button class="btn small danger" onclick="deleteTask(${tid}, ${listId})">✕</button>
+        </div>
+      `).join('');
+
+      card.innerHTML = `
+        <div class="list-header">
+          <span class="list-name">${esc(list.name)}</span>
+          <button class="btn small danger" onclick="deleteList(${listId})">✕</button>
+        </div>
+        ${tasks.length === 0 ? '<div class="empty">empty</div>' : taskRows}
+        <div class="new-task-form">
+          <div class="row">
+            <input type="text" id="task-name-${listId}" placeholder="task name" />
+          </div>
+          <div class="row">
+            <input type="text" id="task-desc-${listId}" placeholder="description (optional)" />
+            <button class="btn small primary" onclick="createTask(${listId})">+</button>
+          </div>
+        </div>
+      `;
+
+      grid.appendChild(card);
+    }
+  }
+
+  async function createList() {
+    const input = document.getElementById('new-list-name');
+    const name = input.value.trim();
+    if (!name) return;
+    input.value = '';
+    await apiFetch('/lists', {
+      method: 'POST',
+      body: JSON.stringify({ name })
+    });
+    loadLists();
+  }
+
+  async function deleteList(listId) {
+    await apiFetch(`/lists/${listId}`, { method: 'DELETE' });
+    loadLists();
+  }
+
+  // ---- Tasks ----
+  async function createTask(listId) {
+    const nameEl = document.getElementById(`task-name-${listId}`);
+    const descEl = document.getElementById(`task-desc-${listId}`);
+    const name = nameEl.value.trim();
+    const description = descEl.value.trim();
+    if (!name) return;
+    nameEl.value = '';
+    descEl.value = '';
+    await apiFetch(`/lists/${listId}/tasks`, {
+      method: 'POST',
+      body: JSON.stringify({ name, description })
+    });
+    loadLists();
+  }
+
+  async function deleteTask(taskId) {
+    await apiFetch(`/tasks/${taskId}`, { method: 'DELETE' });
+    loadLists();
+  }
+
+  // ---- Enter key shortcuts ----
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'Enter') return;
+    if (document.activeElement.id === 'login-email' || document.activeElement.id === 'login-password') doLogin();
+    if (document.activeElement.id === 'reg-email' || document.activeElement.id === 'reg-password') doRegister();
+    if (document.activeElement.id === 'new-list-name') createList();
+  });
+
+  function esc(str) {
+    return String(str)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+</script>
+</body>
+</html>

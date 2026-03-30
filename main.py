@@ -155,12 +155,14 @@ def update_task(task_id: int, body: TaskUpdateRequest, username: str = Depends(g
     manager = load_task_manager(username)
     if task_id not in manager.tasks:
         raise HTTPException(status_code=404, detail="Task not found")
+    manager.begin_batch()
     if body.name is not None:
         manager.change_task_name(task_id, body.name)
     if body.description is not None:
         manager.change_task_description(task_id, body.description)
     if body.color_tag is not None:
         manager.change_color_tag(task_id, body.color_tag)
+    manager.end_batch()
     return {"message": "Task updated"}
 
 

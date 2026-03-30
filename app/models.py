@@ -31,6 +31,8 @@ class TaskManager(BaseModel):
     tasks: dict[int, Task] = Field(default_factory=dict)
     _next_list_id: int = 1
     _next_task_id: int = 1
+    _batch: bool = False
+    _dirty: bool = False
 
     model_config = {"arbitrary_types_allowed": True}
 
@@ -41,8 +43,21 @@ class TaskManager(BaseModel):
         return self
 
     def _save(self):
+        if self._batch:
+            self._dirty = True
+            return
         doc_id = f"tasks_{self.user_id}" if self.user_id else "tasks"
         save_to_firestore(doc_id, self.model_dump(mode="json"))
+
+    def begin_batch(self):
+        self._batch = True
+        self._dirty = False
+
+    def end_batch(self):
+        self._batch = False
+        if self._dirty:
+            self._dirty = False
+            self._save()
 
     def add_list(self, name: str) -> int:
         list_id = self._next_list_id

@@ -1,3 +1,5 @@
+import time
+
 import requests
 
 COLLECTION = "syncup"
@@ -6,6 +8,13 @@ FIREBASE_PROJECT_ID = "syncup-3ad0e"
 FIREBASE_API_KEY = "AIzaSyCg-2nIfs54Kv_XnLk_PMD-4H9F8RhF7tU"
 
 _BASE = "https://firestore.googleapis.com/v1/projects/{project}/databases/(default)/documents/{collection}/{doc_id}"
+
+# Connection pooling — reuses TCP connections across requests
+_session = requests.Session()
+
+# Simple in-memory cache: {doc_id: (data, timestamp)}
+_cache: dict[str, tuple[dict | None, float]] = {}
+CACHE_TTL_SECONDS = 5
 
 
 def _to_value(v) -> dict:
@@ -63,15 +72,30 @@ def _doc_url(doc_id: str) -> str:
 def save_to_firestore(doc_id: str, data: dict) -> None:
     url = _doc_url(doc_id)
     body = {"fields": _dict_to_fields(data)}
-    resp = requests.patch(url, json=body, params={"key": FIREBASE_API_KEY})
+    resp = _session.patch(url, json=body, params={"key": FIREBASE_API_KEY})
     resp.raise_for_status()
+    # Update cache with the data we just wrote
+    _cache[doc_id] = (data, time.monotonic())
+
+
+def invalidate_cache(doc_id: str) -> None:
+    _cache.pop(doc_id, None)
 
 
 def load_from_firestore_raw(doc_id: str) -> dict | None:
+    # Return cached data if fresh enough
+    if doc_id in _cache:
+        cached_data, cached_at = _cache[doc_id]
+        if time.monotonic() - cached_at < CACHE_TTL_SECONDS:
+            return cached_data
+
     url = _doc_url(doc_id)
-    resp = requests.get(url, params={"key": FIREBASE_API_KEY})
+    resp = _session.get(url, params={"key": FIREBASE_API_KEY})
     if resp.status_code == 404:
+        _cache[doc_id] = (None, time.monotonic())
         return None
     resp.raise_for_status()
     data = resp.json()
-    return _fields_to_dict(data.get("fields", {}))
+    result = _fields_to_dict(data.get("fields", {}))
+    _cache[doc_id] = (result, time.monotonic())
+    return result

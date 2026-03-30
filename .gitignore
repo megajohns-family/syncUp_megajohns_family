@@ -7,3 +7,6 @@ env/
 .vscode/
 .idea/
 *.db
+serviceAccountKey.json
+.env
+.DS_Store

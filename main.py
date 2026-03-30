@@ -1,66 +1,182 @@
 from contextlib import asynccontextmanager
-from app.models import TaskManager, ColorTags, UserManager, load_from_json, save_to_json
-from app.database import *
-from fastapi import FastAPI
+from typing import Optional
 
-init_db()
+from fastapi import Depends, FastAPI, HTTPException
+from fastapi.responses import RedirectResponse
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
+
+from app.auth import create_access_token, get_current_user
+from app.models import (
+    ColorTags,
+    UserManager,
+    load_from_firestore,
+    load_task_manager,
+)
+
+
+# ---------------------------------------------------------------------------
+# App lifecycle
+# ---------------------------------------------------------------------------
+
+user_manager: UserManager
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    init_db()
+    global user_manager
+    user_manager = load_from_firestore(UserManager)
     yield
 
+
 app = FastAPI(lifespan=lifespan)
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
-# User management
-print("=== USER MANAGEMENT ===\n")
-users = load_from_json(UserManager, users)
 
-# Register users
-# print("Registering users...")
-# users.register_user("john", "password123")
-# users.register_user("jane", "securepass456")
+@app.get("/", include_in_schema=False)
+def root():
+    return RedirectResponse(url="/static/landingpage.html")
 
-# Login attempts
-print("\nLogging in...")
-users.login_user("john", "password123")
-users.login_user("jane", "wrongpassword")  # This will fail
 
-# Change password
-# print("\nChanging password...")
-# users.change_password("john", "password123", "newpassword789")
+# ---------------------------------------------------------------------------
+# Request / response schemas
+# ---------------------------------------------------------------------------
 
-print("\n" + "="*40 + "\n")
+class UserCredentials(BaseModel):
+    login: str
+    password: str
 
-# Task management
-print("=== TASK MANAGEMENT ===\n")
-manager = TaskManager()
+class ChangePasswordRequest(BaseModel):
+    old_password: str
+    new_password: str
 
-todo = manager.add_list("To Do")
-doing = manager.add_list("Doing")
-done = manager.add_list("Done")
+class ListCreateRequest(BaseModel):
+    name: str
 
-t1 = manager.add_task(todo, "Buy groceries", "Milk, bread, eggs")
-t2 = manager.add_task(todo, "Do Python homework", "Chapter 4 exercises and quiz prep")
-t3 = manager.add_task(doing, "Fix login bug", "Users getting 401 on valid credentials")
-t4 = manager.add_task(todo, "Plan weekend trip", "Look into camping spots near the lake")
-t5 = manager.add_task(done, "Set up repo", "Created GitHub org and invited family members")
+class ListRenameRequest(BaseModel):
+    name: str
 
-manager.change_task_description(t3, "Users getting 401 on valid credentials — check JWT expiry logic")
+class TaskCreateRequest(BaseModel):
+    name: str
+    description: str = ""
 
-manager.move_task(t2, doing)
-manager.move_task(t3, done)
-# manager.pull_from_db("tasks.json")
-# manager = TaskManager.load_from_json("app/json_files/tasks.json")   
-# manager.display()
+class TaskUpdateRequest(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    color_tag: Optional[ColorTags] = None
 
-manager.add_color_tag(t1, ColorTags.GREEN)
-manager.change_color_tag(t1, ColorTags.PURPLE)
+class TaskMoveRequest(BaseModel):
+    target_list_id: int
 
-manager.add_color_tag(t3, ColorTags.GREEN)
-manager.remove_color_tag(t3)
 
-manager.add_color_tag(t5, ColorTags.RED)
-manager.change_color_tag(t5, ColorTags.YELLOW)
+# ---------------------------------------------------------------------------
+# Auth routes (public)
+# ---------------------------------------------------------------------------
 
-manager.display()
+@app.post("/users/register", status_code=201)
+def register(body: UserCredentials):
+    if not user_manager.register_user(body.login, body.password):
+        raise HTTPException(status_code=400, detail="Login already taken or invalid input")
+    return {"message": f"User '{body.login}' registered successfully"}
+
+
+@app.post("/users/login")
+def login(body: UserCredentials):
+    if not user_manager.login_user(body.login, body.password):
+        raise HTTPException(status_code=401, detail="Invalid login or password")
+    token = create_access_token(body.login)
+    return {"access_token": token, "token_type": "bearer"}
+
+
+@app.post("/users/change-password")
+def change_password(body: ChangePasswordRequest, username: str = Depends(get_current_user)):
+    if not user_manager.change_password(username, body.old_password, body.new_password):
+        raise HTTPException(status_code=400, detail="Old password incorrect or user not found")
+    return {"message": "Password changed successfully"}
+
+
+@app.delete("/users/me")
+def delete_account(body: UserCredentials, username: str = Depends(get_current_user)):
+    if body.login != username:
+        raise HTTPException(status_code=403, detail="Cannot delete another user's account")
+    if not user_manager.delete_account(body.login, body.password):
+        raise HTTPException(status_code=400, detail="Wrong password")
+    return {"message": f"Account '{username}' deleted"}
+
+
+# ---------------------------------------------------------------------------
+# List routes (protected)
+# ---------------------------------------------------------------------------
+
+@app.get("/lists")
+def get_lists(username: str = Depends(get_current_user)):
+    manager = load_task_manager(username)
+    return manager.get_all()
+
+
+@app.post("/lists", status_code=201)
+def create_list(body: ListCreateRequest, username: str = Depends(get_current_user)):
+    manager = load_task_manager(username)
+    list_id = manager.add_list(body.name)
+    return {"list_id": list_id, "name": body.name}
+
+
+@app.patch("/lists/{list_id}")
+def rename_list(list_id: int, body: ListRenameRequest, username: str = Depends(get_current_user)):
+    manager = load_task_manager(username)
+    if not manager.rename_list(list_id, body.name):
+        raise HTTPException(status_code=404, detail="List not found")
+    return {"message": "List renamed"}
+
+
+@app.delete("/lists/{list_id}")
+def delete_list(list_id: int, username: str = Depends(get_current_user)):
+    manager = load_task_manager(username)
+    if not manager.remove_list(list_id):
+        raise HTTPException(status_code=404, detail="List not found")
+    return {"message": "List deleted"}
+
+
+# ---------------------------------------------------------------------------
+# Task routes (protected)
+# ---------------------------------------------------------------------------
+
+@app.post("/lists/{list_id}/tasks", status_code=201)
+def create_task(list_id: int, body: TaskCreateRequest, username: str = Depends(get_current_user)):
+    manager = load_task_manager(username)
+    task_id = manager.add_task(list_id, body.name, body.description)
+    if task_id is None:
+        raise HTTPException(status_code=404, detail="List not found")
+    return {"task_id": task_id, "name": body.name}
+
+
+@app.patch("/tasks/{task_id}")
+def update_task(task_id: int, body: TaskUpdateRequest, username: str = Depends(get_current_user)):
+    manager = load_task_manager(username)
+    if task_id not in manager.tasks:
+        raise HTTPException(status_code=404, detail="Task not found")
+    manager.begin_batch()
+    if body.name is not None:
+        manager.change_task_name(task_id, body.name)
+    if body.description is not None:
+        manager.change_task_description(task_id, body.description)
+    if body.color_tag is not None:
+        manager.change_color_tag(task_id, body.color_tag)
+    manager.end_batch()
+    return {"message": "Task updated"}
+
+
+@app.delete("/tasks/{task_id}")
+def delete_task(task_id: int, username: str = Depends(get_current_user)):
+    manager = load_task_manager(username)
+    if not manager.remove_task(task_id):
+        raise HTTPException(status_code=404, detail="Task not found")
+    return {"message": "Task deleted"}
+
+
+@app.post("/tasks/{task_id}/move")
+def move_task(task_id: int, body: TaskMoveRequest, username: str = Depends(get_current_user)):
+    manager = load_task_manager(username)
+    if not manager.move_task(task_id, body.target_list_id):
+        raise HTTPException(status_code=404, detail="Task or target list not found")
+    return {"message": "Task moved"}

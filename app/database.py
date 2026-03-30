@@ -1,99 +1,101 @@
-import sqlite3
-from contextlib import contextmanager
-import json
-from pathlib import Path
+import time
 
-#Files which program operates on:
+import requests
 
-users = Path("app/json_files/users.json")
-tasks = Path("app/json_files/tasks.json")
+COLLECTION = "syncup"
 
-DB_PATH = "syncup_db.db"
+FIREBASE_PROJECT_ID = "syncup-3ad0e"
+FIREBASE_API_KEY = "AIzaSyCg-2nIfs54Kv_XnLk_PMD-4H9F8RhF7tU"
 
-def init_db():
-    with get_db() as db:
-        db.execute("""
-            CREATE TABLE IF NOT EXISTS users(
-                users_file_id INTEGER PRIMARY KEY AUTOINCREMENT,
-                users_file_name VARCHAR(30) UNIQUE,
-                users_file_data TEXT
-            )
-        """)
-        db.execute("""
-            CREATE TABLE IF NOT EXISTS tasks(
-                file_id INTEGER PRIMARY KEY AUTOINCREMENT,
-                file_name VARCHAR(30) UNIQUE,
-                file_data TEXT
-            )
-        """)
-        db.commit()
+_BASE = "https://firestore.googleapis.com/v1/projects/{project}/databases/(default)/documents/{collection}/{doc_id}"
 
-@contextmanager
-def get_db():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    try:
-        yield conn
-    finally:
-        conn.close()
+# Connection pooling — reuses TCP connections across requests
+_session = requests.Session()
 
-def push_to_db(filename: str) -> None:
-    if filename == "tasks.json":
-        path = tasks
-    elif filename == "users.json":
-        path = users
-    else:
-        print("File not found")
-        return
+# Simple in-memory cache: {doc_id: (data, timestamp)}
+_cache: dict[str, tuple[dict | None, float]] = {}
+CACHE_TTL_SECONDS = 5
 
-    with open(path, "r", encoding="utf-8") as f:
-        data = json.load(f)
 
-    with get_db() as db:
-        if filename == "tasks.json":
-            db.execute(
-                "INSERT OR REPLACE INTO tasks(file_name, file_data) VALUES (?, ?)",
-                (filename, json.dumps(data, ensure_ascii=False))
-            )
-            db.commit()
-        elif filename == "users.json":
-            db.execute(
-                "INSERT OR REPLACE INTO users(users_file_name, users_file_data) VALUES (?, ?)",
-                (filename, json.dumps(data, ensure_ascii=False))
-            )
-            db.commit()
+def _to_value(v) -> dict:
+    if v is None:
+        return {"nullValue": None}
+    if isinstance(v, bool):
+        return {"booleanValue": v}
+    if isinstance(v, int):
+        return {"integerValue": str(v)}
+    if isinstance(v, float):
+        return {"doubleValue": v}
+    if isinstance(v, str):
+        return {"stringValue": v}
+    if isinstance(v, list):
+        return {"arrayValue": {"values": [_to_value(i) for i in v]}}
+    if isinstance(v, dict):
+        return {"mapValue": {"fields": {k: _to_value(val) for k, val in v.items()}}}
+    raise TypeError(f"Unsupported type for Firestore: {type(v)}")
 
-def pull_from_db(filename: str) -> None:
-    with get_db() as db:
-        if filename == "tasks.json":
-            row = db.execute(
-                "SELECT file_data FROM tasks WHERE file_name = ?",
-                (filename,)
-            ).fetchone()
 
-            if row is None:
-                print(f"There is no data for {filename} in database")
-                return
+def _from_value(v: dict):
+    if "nullValue" in v:
+        return None
+    if "booleanValue" in v:
+        return v["booleanValue"]
+    if "integerValue" in v:
+        return int(v["integerValue"])
+    if "doubleValue" in v:
+        return float(v["doubleValue"])
+    if "stringValue" in v:
+        return v["stringValue"]
+    if "timestampValue" in v:
+        return v["timestampValue"]
+    if "arrayValue" in v:
+        return [_from_value(i) for i in v["arrayValue"].get("values", [])]
+    if "mapValue" in v:
+        return {k: _from_value(val) for k, val in v["mapValue"].get("fields", {}).items()}
+    raise ValueError(f"Unknown Firestore value type: {v}")
 
-            data = json.loads(row["file_data"])
 
-            with open(tasks, "w", encoding="utf-8") as f:
-                json.dump(data, f, ensure_ascii=False, indent=2)
+def _dict_to_fields(data: dict) -> dict:
+    return {k: _to_value(v) for k, v in data.items()}
 
-        elif filename == "users.json":
-            row = db.execute(
-                "SELECT users_file_data FROM users WHERE users_file_name = ?",
-                (filename,)
-            ).fetchone()
 
-            if row is None:
-                print(f"There is no data for {filename} in database")
-                return
+def _fields_to_dict(fields: dict) -> dict:
+    return {k: _from_value(v) for k, v in fields.items()}
 
-            data = json.loads(row["users_file_data"])
 
-            with open(users, "w", encoding="utf-8") as f:
-                json.dump(data, f, ensure_ascii=False, indent=2)
+def _doc_url(doc_id: str) -> str:
+    return _BASE.format(project=FIREBASE_PROJECT_ID, collection=COLLECTION, doc_id=doc_id)
 
-        else:
-            print(f"Unknown file: {filename}")
+
+# --- Public API ---
+
+def save_to_firestore(doc_id: str, data: dict) -> None:
+    url = _doc_url(doc_id)
+    body = {"fields": _dict_to_fields(data)}
+    resp = _session.patch(url, json=body, params={"key": FIREBASE_API_KEY})
+    resp.raise_for_status()
+    # Update cache with the data we just wrote
+    _cache[doc_id] = (data, time.monotonic())
+
+
+def invalidate_cache(doc_id: str) -> None:
+    _cache.pop(doc_id, None)
+
+
+def load_from_firestore_raw(doc_id: str) -> dict | None:
+    # Return cached data if fresh enough
+    if doc_id in _cache:
+        cached_data, cached_at = _cache[doc_id]
+        if time.monotonic() - cached_at < CACHE_TTL_SECONDS:
+            return cached_data
+
+    url = _doc_url(doc_id)
+    resp = _session.get(url, params={"key": FIREBASE_API_KEY})
+    if resp.status_code == 404:
+        _cache[doc_id] = (None, time.monotonic())
+        return None
+    resp.raise_for_status()
+    data = resp.json()
+    result = _fields_to_dict(data.get("fields", {}))
+    _cache[doc_id] = (result, time.monotonic())
+    return result

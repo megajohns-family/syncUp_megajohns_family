@@ -200,10 +200,16 @@ class UserManager(BaseModel):
 
     model_config = {"arbitrary_types_allowed": True}
 
+    def _reload(self):
+        fresh = load_from_firestore_raw("users") or {}
+        self.users = fresh.get("users", {})
+
     def _save(self):
-        save_to_firestore("users", self.model_dump(mode="json"))
+        save_to_firestore("users", {"users": self.users})
 
     def register_user(self, login, password) -> bool:
+        self._reload()
+
         try:
             user_data = User(login=login, password=password)
         except ValueError:
@@ -217,6 +223,8 @@ class UserManager(BaseModel):
         return True
 
     def login_user(self, login, password) -> bool:
+        self._reload()
+
         try:
             user_data = UserLogin(login=login, password=password)
         except ValueError:
@@ -231,8 +239,14 @@ class UserManager(BaseModel):
         return True
 
     def change_password(self, login, old_password, new_password) -> bool:
+        self._reload()
+
         try:
-            user_data = UserPasswordChange(login=login, old_password=old_password, new_password=new_password)
+            user_data = UserPasswordChange(
+                login=login,
+                old_password=old_password,
+                new_password=new_password
+            )
         except ValueError:
             return False
 
@@ -247,6 +261,8 @@ class UserManager(BaseModel):
         return True
 
     def delete_account(self, login, password) -> bool:
+        self._reload()
+
         try:
             user_data = UserDelete(login=login, password=password)
         except ValueError:
@@ -261,7 +277,6 @@ class UserManager(BaseModel):
         del self.users[user_data.login]
         self._save()
         return True
-
 
 # ---------------- LOADERS ----------------
 

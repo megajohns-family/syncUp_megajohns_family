@@ -1,4 +1,3 @@
-import os
 import requests
 
 COLLECTION = "syncup"
@@ -8,9 +7,6 @@ FIREBASE_API_KEY = "AIzaSyCg-2nIfs54Kv_XnLk_PMD-4H9F8RhF7tU"
 
 _BASE = "https://firestore.googleapis.com/v1/projects/{project}/databases/(default)/documents/{collection}/{doc_id}"
 
-
-def init_db() -> None:
-    pass  
 
 def _to_value(v) -> dict:
     if v is None:

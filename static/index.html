@@ -12,6 +12,7 @@
     <link rel="stylesheet" href="/static/indexmain.css">
 
     <style>
+        /* ── MAIN LAYOUT ── */
         main {
             position: relative;
             z-index: 1;
@@ -53,13 +54,8 @@
         }
 
         @media (max-width: 600px) {
-            .new-list-bar {
-                flex-direction: column;
-            }
-
-            .new-list-bar button {
-                height: 48px;
-            }
+            .new-list-bar { flex-direction: column; }
+            .new-list-bar button { height: 48px; }
         }
 
         .new-list-bar input {
@@ -70,6 +66,12 @@
             background: rgba(253,246,235,0.95);
             font-size: 15px;
             color: var(--ink);
+            outline: none;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        .new-list-bar input:focus {
+            border-color: var(--amber);
+            box-shadow: 0 0 0 3px rgba(200,133,42,0.12);
         }
 
         .new-list-bar button {
@@ -80,119 +82,427 @@
             border-radius: 12px;
             font-weight: 500;
             cursor: pointer;
+            font-family: var(--font-body);
+            font-size: 15px;
+            transition: background 0.2s, transform 0.15s;
+            white-space: nowrap;
         }
+        .new-list-bar button:hover { background: #2e2010; transform: translateY(-1px); }
 
+        /* ── GRID ── */
         .lists-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
             gap: 24px;
+            align-items: start;
         }
 
+        /* ── LIST CARD ── */
         .list-card {
             background: var(--card-bg);
             border: 1px solid var(--border);
             border-radius: 16px;
             padding: 24px;
             box-shadow: 0 12px 40px rgba(26,18,8,0.08);
-            transition: all 0.25s ease;
+            transition: box-shadow 0.25s ease, transform 0.25s ease;
+            position: relative;
         }
-
         .list-card:hover {
-            transform: translateY(-4px);
             box-shadow: 0 18px 45px rgba(26,18,8,0.12);
         }
+        .list-card.drag-over {
+            outline: 2px dashed var(--amber);
+            outline-offset: -2px;
+            background: rgba(200,133,42,0.05);
+        }
+        .list-card.dragging-list {
+            opacity: 0.4;
+            transform: scale(0.98);
+        }
 
+        /* ── LIST HEADER ── */
         .list-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
             margin-bottom: 18px;
+            gap: 8px;
         }
+
+        .list-header-left {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            min-width: 0;
+        }
+
+        /* Drag handle */
+        .drag-handle {
+            cursor: grab;
+            color: var(--muted);
+            opacity: 0.4;
+            padding: 2px 4px;
+            border-radius: 4px;
+            transition: opacity 0.2s;
+            flex-shrink: 0;
+            line-height: 1;
+            font-size: 16px;
+            user-select: none;
+        }
+        .list-card:hover .drag-handle { opacity: 0.7; }
+        .drag-handle:hover { opacity: 1 !important; color: var(--ink); }
+        .drag-handle:active { cursor: grabbing; }
 
         .list-name {
             font-family: var(--font-display);
-            font-size: 22px;
+            font-size: 20px;
             font-weight: 700;
             color: var(--ink);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
+        .delete-list-btn {
+            background: none;
+            border: none;
+            color: #c0a888;
+            font-size: 18px;
+            cursor: pointer;
+            padding: 4px 6px;
+            border-radius: 6px;
+            transition: color 0.2s, background 0.2s;
+            flex-shrink: 0;
+            line-height: 1;
+        }
+        .delete-list-btn:hover { color: #d9534f; background: rgba(217,83,79,0.08); }
+
+        /* ── TASK ITEM ── */
         .task-item {
             display: flex;
-            align-items: flex-start;
-            gap: 12px;
-            padding: 12px 0;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 0;
             border-top: 1px solid var(--border);
+            cursor: grab;
+            transition: background 0.15s;
+            border-radius: 6px;
+            position: relative;
+        }
+        .task-item:first-child { border-top: none; padding-top: 0; }
+        .task-item:active { cursor: grabbing; }
+        .task-item.task-dragging {
+            opacity: 0.35;
+        }
+        .task-item.task-drop-above::before {
+            content: '';
+            position: absolute;
+            top: -1px;
+            left: 0; right: 0;
+            height: 2px;
+            background: var(--amber);
+            border-radius: 2px;
         }
 
-        .task-item:first-child {
-            border-top: none;
-            padding-top: 0;
-        }
-
-        .color-dot {
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-            margin-top: 3px;
+        /* ── COLOR DOT (clickable) ── */
+        .color-dot-wrap {
+            position: relative;
             flex-shrink: 0;
         }
 
-        .color-GREEN { background: #5cb85c; }
-        .color-RED { background: #d9534f; }
-        .color-YELLOW { background: #f0ad4e; }
-        .color-BLUE { background: #4285f4; }
-        .color-PURPLE { background: #9b59b6; }
-        .color-NOTHING { border: 2px solid #b0a090; }
-
-        .task-name { font-size: 15px; }
-        .task-desc { font-size: 13px; color: var(--muted); }
-
-        .new-task-form {
-            margin-top: 18px;
-            display: flex;
-            gap: 10px;
+        .color-dot {
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            cursor: pointer;
+            transition: transform 0.15s, box-shadow 0.15s;
+            flex-shrink: 0;
         }
+        .color-dot:hover { transform: scale(1.25); box-shadow: 0 0 0 3px rgba(200,133,42,0.2); }
 
+        .color-GREEN  { background: #5cb85c; }
+        .color-RED    { background: #d9534f; }
+        .color-YELLOW { background: #f0ad4e; }
+        .color-BLUE   { background: #4285f4; }
+        .color-PURPLE { background: #9b59b6; }
+        .color-NOTHING { background: transparent; border: 2px solid #c0a888; }
+
+        /* Color dropdown */
+        .color-dropdown {
+            position: absolute;
+            top: 22px;
+            left: 0;
+            z-index: 200;
+            background: var(--cream);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 10px;
+            box-shadow: 0 12px 36px rgba(26,18,8,0.18);
+            display: none;
+            flex-direction: column;
+            gap: 6px;
+            min-width: 130px;
+        }
+        .color-dropdown.open { display: flex; }
+
+        .color-option {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 6px 10px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--ink);
+            transition: background 0.15s;
+            border: none;
+            background: none;
+            font-family: var(--font-body);
+            width: 100%;
+            text-align: left;
+        }
+        .color-option:hover { background: rgba(26,18,8,0.06); }
+        .color-option .swatch {
+            width: 12px; height: 12px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+        .color-option.active { background: rgba(200,133,42,0.1); }
+
+        /* ── TASK TEXT ── */
+        .task-text { flex: 1; min-width: 0; }
+        .task-name {
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--ink);
+            line-height: 1.4;
+            cursor: text;
+            border-radius: 4px;
+            padding: 1px 3px;
+            margin: -1px -3px;
+            transition: background 0.15s;
+        }
+        .task-name:hover { background: rgba(26,18,8,0.05); }
+        .task-name[contenteditable="true"] {
+            outline: none;
+            background: rgba(200,133,42,0.08);
+            box-shadow: 0 0 0 2px rgba(200,133,42,0.3);
+        }
+        .task-desc {
+            font-size: 12px;
+            color: var(--muted);
+            margin-top: 2px;
+            cursor: text;
+            border-radius: 4px;
+            padding: 1px 3px;
+            margin-left: -3px;
+            transition: background 0.15s;
+        }
+        .task-desc:hover { background: rgba(26,18,8,0.05); }
+        .task-desc[contenteditable="true"] {
+            outline: none;
+            background: rgba(200,133,42,0.08);
+            box-shadow: 0 0 0 2px rgba(200,133,42,0.3);
+        }
+        .task-desc-placeholder { color: #c0a888; font-style: italic; }
+
+        .task-actions {
+            display: flex;
+            gap: 2px;
+            flex-shrink: 0;
+            opacity: 0;
+            transition: opacity 0.15s;
+        }
+        .task-item:hover .task-actions { opacity: 1; }
+
+        .task-btn {
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 4px 6px;
+            border-radius: 6px;
+            color: #b0a090;
+            font-size: 14px;
+            transition: color 0.15s, background 0.15s;
+            line-height: 1;
+        }
+        .task-btn:hover { color: #d9534f; background: rgba(217,83,79,0.08); }
+
+        /* ── NEW TASK FORM ── */
+        .new-task-form {
+            margin-top: 16px;
+            display: flex;
+            gap: 8px;
+        }
         .new-task-form input {
             flex: 1;
-            padding: 12px 14px;
+            padding: 10px 14px;
             border-radius: 10px;
             border: 1.5px solid var(--border);
+            background: rgba(253,246,235,0.8);
+            font-size: 14px;
+            color: var(--ink);
+            font-family: var(--font-body);
+            outline: none;
+            transition: border-color 0.2s, box-shadow 0.2s;
         }
-
+        .new-task-form input:focus {
+            border-color: var(--amber);
+            box-shadow: 0 0 0 3px rgba(200,133,42,0.1);
+        }
         .new-task-form button {
-            width: 46px;
+            width: 40px;
+            height: 40px;
             background: var(--amber);
             color: white;
             border: none;
             border-radius: 10px;
-            font-size: 20px;
+            font-size: 22px;
             cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.2s, transform 0.15s;
+            flex-shrink: 0;
         }
+        .new-task-form button:hover { background: #b8741f; transform: scale(1.05); }
 
+        /* ── EMPTY STATE ── */
         .empty-state {
             text-align: center;
-            padding: 40px 10px;
+            padding: 28px 10px;
             color: var(--muted);
+            font-size: 13px;
             font-style: italic;
         }
+        .empty-state-drop {
+            border: 2px dashed rgba(200,133,42,0.3);
+            border-radius: 10px;
+            padding: 20px;
+        }
 
+        /* ── LOADING ── */
+        #loading {
+            text-align: center;
+            padding: 80px;
+            color: var(--muted);
+            font-size: 16px;
+        }
+
+        /* ── TOAST ── */
         .toast {
             position: fixed;
-            top: 82px;
-            right: 30px;
-            padding: 16px 24px;
+            top: 88px;
+            right: 28px;
+            padding: 14px 22px;
             border-radius: 12px;
             box-shadow: 0 15px 35px rgba(26,18,8,0.25);
-            font-size: 15px;
+            font-size: 14px;
+            font-weight: 500;
             z-index: 9999;
             display: none;
             align-items: center;
-            min-width: 260px;
+            gap: 10px;
+            min-width: 240px;
+            animation: toastIn 0.3s cubic-bezier(0.22, 1, 0.36, 1);
         }
-
+        @keyframes toastIn {
+            from { opacity: 0; transform: translateX(20px); }
+            to   { opacity: 1; transform: translateX(0); }
+        }
         .toast.success { background: #5cb85c; color: white; }
         .toast.error   { background: #d9534f; color: white; }
+        .toast.info    { background: var(--ink); color: var(--cream); }
+
+        /* ── CUSTOM MODAL (confirm dialog) ── */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(26,18,8,0.45);
+            backdrop-filter: blur(6px);
+            z-index: 8888;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s;
+        }
+        .modal-overlay.open {
+            opacity: 1;
+            pointer-events: all;
+        }
+        .modal-box {
+            background: var(--cream);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 36px 40px;
+            max-width: 400px;
+            width: 90%;
+            box-shadow: 0 32px 80px rgba(26,18,8,0.22);
+            transform: scale(0.94) translateY(8px);
+            transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+            text-align: center;
+        }
+        .modal-overlay.open .modal-box {
+            transform: scale(1) translateY(0);
+        }
+        .modal-icon {
+            font-size: 32px;
+            margin-bottom: 16px;
+        }
+        .modal-title {
+            font-family: var(--font-display);
+            font-size: 22px;
+            font-weight: 700;
+            color: var(--ink);
+            margin-bottom: 10px;
+            letter-spacing: -0.5px;
+        }
+        .modal-body {
+            font-size: 14px;
+            color: var(--muted);
+            margin-bottom: 28px;
+            line-height: 1.6;
+        }
+        .modal-actions {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+        }
+        .modal-btn {
+            padding: 12px 28px;
+            border-radius: 10px;
+            font-size: 14px;
+            font-weight: 500;
+            font-family: var(--font-body);
+            cursor: pointer;
+            border: none;
+            transition: background 0.2s, transform 0.15s;
+        }
+        .modal-btn:hover { transform: translateY(-1px); }
+        .modal-btn.cancel {
+            background: rgba(26,18,8,0.07);
+            color: var(--muted);
+        }
+        .modal-btn.cancel:hover { background: rgba(26,18,8,0.12); }
+        .modal-btn.confirm-delete {
+            background: #d9534f;
+            color: white;
+        }
+        .modal-btn.confirm-delete:hover { background: #c9403c; }
+
+        /* ── TASK COUNTER badge ── */
+        .task-count {
+            font-size: 11px;
+            font-weight: 500;
+            color: var(--muted);
+            background: rgba(26,18,8,0.06);
+            padding: 2px 8px;
+            border-radius: 20px;
+            flex-shrink: 0;
+        }
     </style>
 </head>
 
@@ -203,17 +513,31 @@
 <div class="bg-orb orb-2"></div>
 <div class="bg-orb orb-3"></div>
 
+<!-- Custom confirm modal -->
+<div class="modal-overlay" id="modal-overlay">
+    <div class="modal-box">
+        <div class="modal-icon" id="modal-icon">🗑️</div>
+        <div class="modal-title" id="modal-title">Are you sure?</div>
+        <div class="modal-body" id="modal-body">This action cannot be undone.</div>
+        <div class="modal-actions">
+            <button class="modal-btn cancel" id="modal-cancel">Cancel</button>
+            <button class="modal-btn confirm-delete" id="modal-confirm">Delete</button>
+        </div>
+    </div>
+</div>
+
 <header>
     <a href="/static/landingpage.html" class="logo">
         <span class="logo-mark">S</span>
         <span class="logo-text">SyncUp</span>
     </a>
-
     <nav class="nav-links">
-        <span style="color:var(--muted);">
+        <span style="color:var(--muted); font-size:14px;">
             Hi, <span id="username-label" style="color:var(--ink);font-weight:500;"></span>
         </span>
-        <button onclick="logout()" style="margin-left:20px;background:var(--ink);color:var(--cream);padding:9px 22px;border:none;border-radius:10px;cursor:pointer;">Log out</button>
+        <button onclick="logout()" style="margin-left:16px;background:var(--ink);color:var(--cream);padding:9px 22px;border:none;border-radius:10px;cursor:pointer;font-family:var(--font-body);font-size:14px;font-weight:500;transition:background 0.2s;" onmouseover="this.style.background='#2e2010'" onmouseout="this.style.background='var(--ink)'">
+            Log out
+        </button>
     </nav>
 </header>
 
@@ -222,37 +546,86 @@
         <h1 class="dashboard-title">
             Your tasks,<br>perfectly in sync
         </h1>
-
         <div class="new-list-bar">
-            <input type="text" id="new-list-name" placeholder="Create a new list..." onkeypress="if(event.key==='Enter') createList()">
+            <input type="text" id="new-list-name" placeholder="Create a new list…" onkeydown="if(event.key==='Enter') createList()">
             <button onclick="createList()">Create</button>
         </div>
     </div>
 
-    <div id="loading" style="display:none;text-align:center;padding:80px;color:var(--muted);">
-        Loading your workspace...
-    </div>
-
+    <div id="loading" style="display:none;">Loading your workspace…</div>
     <div class="lists-grid" id="lists-grid"></div>
 </main>
 
 <div id="toast" class="toast"></div>
 
 <script>
-/* JS bez zmian */
+/* ============================================================
+   CONFIG
+   ============================================================ */
 const API = '';
-const getToken = () => localStorage.getItem('token');
-const getUser  = () => localStorage.getItem('username');
-const clearAuth = () => localStorage.clear();
+const getToken    = () => localStorage.getItem('token');
+const getUser     = () => localStorage.getItem('username');
+const clearAuth   = () => localStorage.clear();
 
+/* ============================================================
+   COLOR HELPERS
+   ============================================================ */
+const COLORS = [
+    { id: 'NOTHING', label: 'None',   hex: null },
+    { id: 'GREEN',   label: 'Green',  hex: '#5cb85c' },
+    { id: 'RED',     label: 'Red',    hex: '#d9534f' },
+    { id: 'YELLOW',  label: 'Yellow', hex: '#f0ad4e' },
+    { id: 'BLUE',    label: 'Blue',   hex: '#4285f4' },
+    { id: 'PURPLE',  label: 'Purple', hex: '#9b59b6' },
+];
+
+/* ============================================================
+   TOAST
+   ============================================================ */
 function showToast(msg, type = 'success') {
     const t = document.getElementById('toast');
     t.textContent = msg;
     t.className = `toast ${type}`;
     t.style.display = 'flex';
-    setTimeout(() => t.style.display = 'none', 3200);
+    clearTimeout(t._timer);
+    t._timer = setTimeout(() => t.style.display = 'none', 3000);
 }
 
+/* ============================================================
+   CUSTOM CONFIRM MODAL
+   ============================================================ */
+function showConfirm({ title, body, icon = '🗑️', confirmLabel = 'Delete', confirmClass = 'confirm-delete' }) {
+    return new Promise(resolve => {
+        const overlay  = document.getElementById('modal-overlay');
+        const btnOk    = document.getElementById('modal-confirm');
+        const btnCancel = document.getElementById('modal-cancel');
+
+        document.getElementById('modal-icon').textContent  = icon;
+        document.getElementById('modal-title').textContent = title;
+        document.getElementById('modal-body').textContent  = body;
+        btnOk.textContent = confirmLabel;
+        btnOk.className = `modal-btn ${confirmClass}`;
+
+        overlay.classList.add('open');
+
+        const close = result => {
+            overlay.classList.remove('open');
+            btnOk.removeEventListener('click', onOk);
+            btnCancel.removeEventListener('click', onCancel);
+            resolve(result);
+        };
+        const onOk     = () => close(true);
+        const onCancel = () => close(false);
+
+        btnOk.addEventListener('click', onOk);
+        btnCancel.addEventListener('click', onCancel);
+        overlay.addEventListener('click', e => { if (e.target === overlay) close(false); }, { once: true });
+    });
+}
+
+/* ============================================================
+   AUTH HELPERS
+   ============================================================ */
 window.onload = () => {
     if (!getToken()) return window.location.href = '/static/login.html';
     document.getElementById('username-label').textContent = getUser() || 'User';
@@ -275,93 +648,440 @@ async function apiFetch(path, opts = {}) {
     return res;
 }
 
+/* ============================================================
+   LOCAL LIST ORDER (persisted in localStorage)
+   ============================================================ */
+function getOrderKey() { return `syncup_order_${getUser()}`; }
+
+function saveOrder(ids) {
+    localStorage.setItem(getOrderKey(), JSON.stringify(ids));
+}
+
+function loadOrder() {
+    try { return JSON.parse(localStorage.getItem(getOrderKey())) || []; }
+    catch { return []; }
+}
+
+function applyOrder(entries) {
+    const order = loadOrder();
+    if (!order.length) return entries;
+    const map = Object.fromEntries(entries.map(e => [String(e[0]), e]));
+    const ordered = order.map(id => map[String(id)]).filter(Boolean);
+    const remaining = entries.filter(e => !order.includes(String(e[0])) && !order.includes(e[0]));
+    return [...ordered, ...remaining];
+}
+
+/* ============================================================
+   LOAD & RENDER
+   ============================================================ */
 async function loadLists() {
     document.getElementById('loading').style.display = '';
     document.getElementById('lists-grid').innerHTML = '';
     const res = await apiFetch('/lists');
     document.getElementById('loading').style.display = 'none';
     if (!res) return;
-    renderLists(await res.json());
+    const data = await res.json();
+    renderLists(data);
 }
 
 function esc(s) {
     return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
+/* ── Global drag state ── */
+let dragTaskId   = null;
+let dragListId   = null; // card dragging
+let dragOverCard = null;
+
+/* ── Render all lists ── */
 function renderLists(data) {
     const grid = document.getElementById('lists-grid');
     grid.innerHTML = '';
-    const entries = Object.entries(data || {});
 
-    if (entries.length === 0) {
+    let entries = Object.entries(data || {}).map(([id, list]) => [id, list]);
+    if (!entries.length) {
         grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:120px 20px;color:var(--muted);font-size:18px;">
             No lists yet.<br>Create one above 👆
         </div>`;
         return;
     }
 
+    entries = applyOrder(entries);
+
+    // Persist current order
+    saveOrder(entries.map(e => String(e[0])));
+
     for (const [id, list] of entries) {
-        const card = document.createElement('div');
-        card.className = 'list-card';
+        grid.appendChild(makeCard(id, list));
+    }
 
-        const tasks = list.tasks ? Object.entries(list.tasks) : [];
+    initListDragDrop();
+}
 
-        let html = tasks.length ? tasks.map(([tid, t]) => `
-            <div class="task-item">
-                <div class="color-dot color-${(t.color_tag||'NOTHING').toUpperCase()}"></div>
-                <div style="flex:1">
-                    <div class="task-name">${esc(t.name)}</div>
-                    ${t.description ? `<div class="task-desc">${esc(t.description)}</div>` : ''}
-                </div>
-                <button onclick="deleteTask('${tid}')" style="background:none;border:none;color:#b0a090;font-size:22px;cursor:pointer;">✕</button>
-            </div>`).join('')
-            : `<div class="empty-state">This list is empty</div>`;
+/* ── Build a single list card ── */
+function makeCard(listId, list) {
+    const card = document.createElement('div');
+    card.className = 'list-card';
+    card.dataset.listId = listId;
 
-        card.innerHTML = `
-            <div class="list-header">
+    const tasks = list.tasks ? Object.entries(list.tasks) : [];
+
+    // Task items HTML
+    let tasksHtml = tasks.length
+        ? tasks.map(([tid, t]) => makeTaskHtml(tid, t, listId)).join('')
+        : `<div class="empty-state empty-state-drop">No tasks yet — drop one here or add below</div>`;
+
+    const taskCount = tasks.length;
+
+    card.innerHTML = `
+        <div class="list-header">
+            <div class="list-header-left">
+                <span class="drag-handle" title="Drag to reorder">⠿</span>
                 <span class="list-name">${esc(list.name)}</span>
-                <button onclick="deleteList('${id}')" class="delete-list-btn">✕</button>
+                ${taskCount ? `<span class="task-count">${taskCount}</span>` : ''}
             </div>
-            ${html}
-            <div class="new-task-form">
-                <input type="text" id="task-input-${id}" placeholder="New task..." onkeypress="if(event.key==='Enter') createTask('${id}')">
-                <button onclick="createTask('${id}')">+</button>
-            </div>`;
+            <button class="delete-list-btn" onclick="confirmDeleteList('${listId}', '${esc(list.name)}')" title="Delete list">✕</button>
+        </div>
+        <div class="task-list" data-list-id="${listId}">
+            ${tasksHtml}
+        </div>
+        <div class="new-task-form">
+            <input type="text" id="task-input-${listId}" placeholder="New task…" onkeydown="if(event.key==='Enter') createTask('${listId}')">
+            <button onclick="createTask('${listId}')">+</button>
+        </div>`;
 
-        grid.appendChild(card);
+    // Task drag-drop (drop zone on the task-list area)
+    const taskListEl = card.querySelector('.task-list');
+    setupTaskDropZone(taskListEl, listId);
+
+    return card;
+}
+
+/* ── Build a task row HTML string ── */
+function makeTaskHtml(tid, t, listId) {
+    const color = (t.color_tag || 'NOTHING').toUpperCase();
+    const colorObj = COLORS.find(c => c.id === color) || COLORS[0];
+    const swatchStyle = colorObj.hex
+        ? `background:${colorObj.hex};`
+        : `background:transparent;border:2px solid #c0a888;`;
+
+    const desc = t.description
+        ? `<div class="task-desc" data-task-id="${tid}" data-field="description" contenteditable="false">${esc(t.description)}</div>`
+        : `<div class="task-desc task-desc-placeholder" data-task-id="${tid}" data-field="description" contenteditable="false">Add description…</div>`;
+
+    return `
+    <div class="task-item"
+         draggable="true"
+         data-task-id="${tid}"
+         data-list-id="${listId}">
+        <div class="color-dot-wrap">
+            <div class="color-dot color-${color}"
+                 style="${swatchStyle}"
+                 data-task-id="${tid}"
+                 onclick="toggleColorDropdown(event, '${tid}')"></div>
+            <div class="color-dropdown" id="color-dd-${tid}">
+                ${COLORS.map(c => `
+                    <button class="color-option ${c.id === color ? 'active' : ''}"
+                            onclick="setColor('${tid}', '${c.id}')">
+                        <span class="swatch" style="${c.hex ? `background:${c.hex}` : 'background:transparent;border:2px solid #c0a888;border-radius:50%;display:block;'}"></span>
+                        ${c.label}
+                    </button>`).join('')}
+            </div>
+        </div>
+        <div class="task-text">
+            <div class="task-name"
+                 data-task-id="${tid}"
+                 data-field="name"
+                 contenteditable="false">${esc(t.name)}</div>
+            ${desc}
+        </div>
+        <div class="task-actions">
+            <button class="task-btn" onclick="confirmDeleteTask('${tid}', '${esc(t.name)}')" title="Delete task">✕</button>
+        </div>
+    </div>`;
+}
+
+/* ============================================================
+   COLOR DROPDOWN
+   ============================================================ */
+function toggleColorDropdown(e, taskId) {
+    e.stopPropagation();
+    const dd = document.getElementById(`color-dd-${taskId}`);
+    const isOpen = dd.classList.contains('open');
+    closeAllDropdowns();
+    if (!isOpen) dd.classList.add('open');
+}
+
+function closeAllDropdowns() {
+    document.querySelectorAll('.color-dropdown.open').forEach(d => d.classList.remove('open'));
+}
+
+document.addEventListener('click', closeAllDropdowns);
+
+async function setColor(taskId, colorId) {
+    closeAllDropdowns();
+    const res = await apiFetch(`/tasks/${taskId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ color_tag: colorId })
+    });
+    if (res?.ok) {
+        showToast('Color updated', 'success');
+        loadLists();
+    } else {
+        showToast('Failed to update color', 'error');
     }
 }
 
+/* ============================================================
+   INLINE EDIT (double-click on task name / description)
+   ============================================================ */
+document.addEventListener('dblclick', e => {
+    const el = e.target.closest('[data-field]');
+    if (!el) return;
+    if (el.contentEditable === 'true') return;
+
+    // Remove placeholder styling
+    el.classList.remove('task-desc-placeholder');
+
+    el.contentEditable = 'true';
+    el.focus();
+
+    // Select all text
+    const range = document.createRange();
+    range.selectNodeContents(el);
+    window.getSelection().removeAllRanges();
+    window.getSelection().addRange(range);
+
+    const taskId = el.dataset.taskId;
+    const field  = el.dataset.field;
+    const original = el.textContent;
+
+    const commit = async () => {
+        el.contentEditable = 'false';
+        const newVal = el.textContent.trim();
+
+        if (newVal === original) return;
+
+        const body = field === 'name'
+            ? { name: newVal || original }
+            : { description: newVal };
+
+        const res = await apiFetch(`/tasks/${taskId}`, {
+            method: 'PATCH',
+            body: JSON.stringify(body)
+        });
+
+        if (res?.ok) {
+            showToast('Task updated', 'success');
+            if (!newVal && field === 'description') {
+                el.textContent = 'Add description…';
+                el.classList.add('task-desc-placeholder');
+            }
+        } else {
+            el.textContent = original;
+            showToast('Failed to update', 'error');
+        }
+    };
+
+    el.addEventListener('blur', commit, { once: true });
+    el.addEventListener('keydown', e => {
+        if (e.key === 'Enter' && field === 'name') { e.preventDefault(); el.blur(); }
+        if (e.key === 'Escape') { el.textContent = original; el.blur(); }
+    });
+});
+
+/* ============================================================
+   TASK DRAG & DROP (between lists)
+   ============================================================ */
+document.addEventListener('dragstart', e => {
+    const item = e.target.closest('.task-item');
+    if (!item) return;
+    dragTaskId = item.dataset.taskId;
+    item.classList.add('task-dragging');
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', dragTaskId);
+});
+
+document.addEventListener('dragend', e => {
+    const item = e.target.closest('.task-item');
+    if (item) item.classList.remove('task-dragging');
+    document.querySelectorAll('.task-drop-above').forEach(el => el.classList.remove('task-drop-above'));
+    document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
+    dragTaskId = null;
+});
+
+function setupTaskDropZone(el, listId) {
+    el.addEventListener('dragover', e => {
+        if (!dragTaskId) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        el.closest('.list-card').classList.add('drag-over');
+    });
+
+    el.addEventListener('dragleave', e => {
+        if (!el.contains(e.relatedTarget)) {
+            el.closest('.list-card').classList.remove('drag-over');
+        }
+    });
+
+    el.addEventListener('drop', async e => {
+        e.preventDefault();
+        el.closest('.list-card').classList.remove('drag-over');
+        if (!dragTaskId) return;
+
+        const targetItem = e.target.closest('.task-item');
+        const sourceListId = document.querySelector(`.task-item[data-task-id="${dragTaskId}"]`)?.dataset.listId;
+
+        // If same list and same task, nothing to do
+        if (sourceListId === listId && !targetItem) return;
+
+        // Move via API
+        const res = await apiFetch(`/tasks/${dragTaskId}/move`, {
+            method: 'POST',
+            body: JSON.stringify({ target_list_id: parseInt(listId) })
+        });
+        if (res?.ok) {
+            showToast('Task moved', 'success');
+            loadLists();
+        } else if (res?.status !== 404) {
+            // Already on same list — no move needed (API returns 404 when listId same? No — it returns ok)
+            showToast('Could not move task', 'error');
+        }
+    });
+}
+
+/* ============================================================
+   LIST DRAG & DROP (reorder cards by handle)
+   ============================================================ */
+function initListDragDrop() {
+    const grid = document.getElementById('lists-grid');
+
+    grid.querySelectorAll('.drag-handle').forEach(handle => {
+        const card = handle.closest('.list-card');
+
+        handle.addEventListener('mousedown', () => {
+            card.draggable = true;
+        });
+        handle.addEventListener('mouseup', () => {
+            card.draggable = false;
+        });
+    });
+
+    grid.addEventListener('dragstart', e => {
+        const card = e.target.closest('.list-card[draggable="true"]');
+        if (!card) return;
+        dragListId = card.dataset.listId;
+        card.classList.add('dragging-list');
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', 'list');
+        e.stopPropagation(); // don't conflict with task drag
+    });
+
+    grid.addEventListener('dragover', e => {
+        if (!dragListId) return;
+        const card = e.target.closest('.list-card');
+        if (!card || card.dataset.listId === dragListId) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        dragOverCard = card;
+    });
+
+    grid.addEventListener('drop', e => {
+        if (!dragListId) return;
+        e.preventDefault();
+        const targetCard = e.target.closest('.list-card');
+        if (!targetCard || targetCard.dataset.listId === dragListId) {
+            cleanup();
+            return;
+        }
+
+        // Reorder DOM
+        const cards = [...grid.querySelectorAll('.list-card')];
+        const srcCard = cards.find(c => c.dataset.listId === dragListId);
+        const tgtCard = targetCard;
+
+        if (!srcCard) { cleanup(); return; }
+
+        const srcIdx = cards.indexOf(srcCard);
+        const tgtIdx = cards.indexOf(tgtCard);
+
+        if (srcIdx < tgtIdx) {
+            tgtCard.after(srcCard);
+        } else {
+            tgtCard.before(srcCard);
+        }
+
+        // Save new order
+        const newOrder = [...grid.querySelectorAll('.list-card')].map(c => c.dataset.listId);
+        saveOrder(newOrder);
+        cleanup();
+    });
+
+    grid.addEventListener('dragend', () => cleanup());
+
+    function cleanup() {
+        grid.querySelectorAll('.dragging-list').forEach(c => {
+            c.classList.remove('dragging-list');
+            c.draggable = false;
+        });
+        dragListId = null;
+        dragOverCard = null;
+    }
+}
+
+/* ============================================================
+   CREATE / DELETE — Lists
+   ============================================================ */
 async function createList() {
-    const name = document.getElementById('new-list-name').value.trim();
+    const input = document.getElementById('new-list-name');
+    const name = input.value.trim();
     if (!name) return;
-    document.getElementById('new-list-name').value = '';
-    const res = await apiFetch('/lists', {method:'POST', body:JSON.stringify({name})});
-    if (res?.ok) { showToast('List created'); loadLists(); }
+    input.value = '';
+    const res = await apiFetch('/lists', { method: 'POST', body: JSON.stringify({ name }) });
+    if (res?.ok) { showToast('List created ✓', 'success'); loadLists(); }
+    else showToast('Failed to create list', 'error');
 }
 
-async function deleteList(id) {
-    if (!confirm('Delete this list?')) return;
-    const res = await apiFetch(`/lists/${id}`, {method:'DELETE'});
-    if (res?.ok) { showToast('List deleted'); loadLists(); }
+async function confirmDeleteList(listId, listName) {
+    const ok = await showConfirm({
+        title: 'Delete list?',
+        body: `"${listName}" and all its tasks will be permanently removed.`,
+        icon: '🗂️',
+        confirmLabel: 'Delete list',
+    });
+    if (!ok) return;
+    const res = await apiFetch(`/lists/${listId}`, { method: 'DELETE' });
+    if (res?.ok) { showToast('List deleted', 'info'); loadLists(); }
+    else showToast('Failed to delete list', 'error');
 }
 
+/* ============================================================
+   CREATE / DELETE — Tasks
+   ============================================================ */
 async function createTask(listId) {
     const input = document.getElementById(`task-input-${listId}`);
     const name = input.value.trim();
     if (!name) return;
     input.value = '';
     const res = await apiFetch(`/lists/${listId}/tasks`, {
-        method:'POST',
-        body:JSON.stringify({name, description:''})
+        method: 'POST',
+        body: JSON.stringify({ name, description: '' })
     });
-    if (res?.ok) { showToast('Task added'); loadLists(); }
+    if (res?.ok) { showToast('Task added ✓', 'success'); loadLists(); }
+    else showToast('Failed to add task', 'error');
 }
 
-async function deleteTask(taskId) {
-    if (!confirm('Delete this task?')) return;
-    const res = await apiFetch(`/tasks/${taskId}`, {method:'DELETE'});
-    if (res?.ok) { showToast('Task deleted'); loadLists(); }
+async function confirmDeleteTask(taskId, taskName) {
+    const ok = await showConfirm({
+        title: 'Delete task?',
+        body: `"${taskName}" will be permanently removed.`,
+        icon: '🗑️',
+        confirmLabel: 'Delete task',
+    });
+    if (!ok) return;
+    const res = await apiFetch(`/tasks/${taskId}`, { method: 'DELETE' });
+    if (res?.ok) { showToast('Task deleted', 'info'); loadLists(); }
+    else showToast('Failed to delete task', 'error');
 }
 </script>
 

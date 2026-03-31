@@ -52,25 +52,25 @@ jobs:
           FIREBASE_CREDENTIALS: ${{ secrets.FIREBASE_CREDENTIALS }}
         run: |
           python - <<'EOF'
-import os
-from app.models import UserManager, load_task_manager
-
-username = os.environ["USERNAME"]
-password = os.environ["PASSWORD"]
-action = os.environ["ACTION"]
-task_id = int(os.environ["TASK_ID"])
-target_list_id = int(os.environ["TARGET_LIST_ID"])
-
-um = UserManager()
-if not um.login_user(username, password):
-    print("Login failed")
-    exit(1)
-
-print(f"Logged in as: {username}")
-
-tm = load_task_manager(username)
-
-if action == "move_task":
-    success = tm.move_task(task_id, target_list_id)
-    print(f"Task {task_id} moved to list {target_list_id}" if success else "Move failed — wrong task_id or list_id")
-EOF
+          import os
+          from app.models import UserManager, load_task_manager
+          
+          username = os.environ["USERNAME"]
+          password = os.environ["PASSWORD"]
+          action = os.environ["ACTION"]
+          task_id = int(os.environ["TASK_ID"])
+          target_list_id = int(os.environ["TARGET_LIST_ID"])
+          
+          um = UserManager()
+          if not um.login_user(username, password):
+              print("Login failed")
+              exit(1)
+          
+          print(f"Logged in as: {username}")
+          
+          tm = load_task_manager(username)
+          
+          if action == "move_task":
+              success = tm.move_task(task_id, target_list_id)
+              print(f"Task {task_id} moved to list {target_list_id}" if success else "Move failed — wrong task_id or list_id")
+          EOF

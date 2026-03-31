@@ -51,8 +51,8 @@ jobs:
           TARGET_LIST_ID: ${{ github.event.inputs.target_list_id }}
         run: |
           python - <<'EOF'
-          import os
-          from app.models import UserManager, TaskManager, load_from_json
+          import json
+          from app.models import UserManager, TaskManager
           from pathlib import Path
       
           username = os.environ["USERNAME"]
@@ -61,7 +61,9 @@ jobs:
           task_id = int(os.environ["TASK_ID"])
           target_list_id = int(os.environ["TARGET_LIST_ID"])
       
-          um = load_from_json(UserManager, Path("app/json_files/users.json"))
+          with open("app/json_files/users.json", "r", encoding="utf-8") as f:
+               data = json.load(f)
+          um = UserManager.model_validate(data)
       
           if not um.login_user(username, password):
               print("❌ Login failed")
@@ -69,7 +71,13 @@ jobs:
       
           print(f"✅ Logged in as: {username}")
           
-          tm = load_from_json(TaskManager, Path("app/json_files/tasks.json"))
+          with open("app/json_files/tasks.json", "r", encoding="utf-8") as f:
+              data = json.load(f)
+          data["lists"] = {int(k): v for k, v in data.get("lists", {}).items()}
+          data["tasks"] = {int(k): v for k, v in data.get("tasks", {}).items()}
+          for lst in data["lists"].values():
+              lst["task_ids"] = [int(tid) for tid in lst.get("task_ids", [])]
+          tm = TaskManager.model_validate(data)
 
           if action == "move_task":
               success = tm.move_task(task_id, target_list_id)

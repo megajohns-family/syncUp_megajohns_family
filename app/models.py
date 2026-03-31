@@ -29,6 +29,7 @@ class TaskManager(BaseModel):
     user_id: str = ""
     lists: dict[int, TaskList] = Field(default_factory=dict)
     tasks: dict[int, Task] = Field(default_factory=dict)
+    list_order: list[int] = Field(default_factory=list)
     _next_list_id: int = 1
     _next_task_id: int = 1
     _batch: bool = False
@@ -40,6 +41,12 @@ class TaskManager(BaseModel):
     def _init_counters(self):
         self._next_list_id = max(self.lists.keys(), default=0) + 1
         self._next_task_id = max(self.tasks.keys(), default=0) + 1
+        # Sync list_order with actual lists (add missing, remove stale)
+        existing = set(self.lists.keys())
+        self.list_order = [lid for lid in self.list_order if lid in existing]
+        for lid in self.lists:
+            if lid not in self.list_order:
+                self.list_order.append(lid)
         return self
 
     def _save(self):
@@ -62,6 +69,7 @@ class TaskManager(BaseModel):
     def add_list(self, name: str) -> int:
         list_id = self._next_list_id
         self.lists[list_id] = TaskList(name=name)
+        self.list_order.append(list_id)
         self._next_list_id += 1
         self._save()
         return list_id
@@ -72,6 +80,8 @@ class TaskManager(BaseModel):
         for task_id in self.lists[list_id].task_ids:
             del self.tasks[task_id]
         del self.lists[list_id]
+        if list_id in self.list_order:
+            self.list_order.remove(list_id)
         self._save()
         return True
 
@@ -79,6 +89,14 @@ class TaskManager(BaseModel):
         if list_id not in self.lists:
             return False
         self.lists[list_id].name = new_name
+        self._save()
+        return True
+
+    def reorder_lists(self, order: list[int]) -> bool:
+        # Validate that order contains exactly the same IDs as existing lists
+        if set(order) != set(self.lists.keys()):
+            return False
+        self.list_order = order
         self._save()
         return True
 
@@ -159,13 +177,16 @@ class TaskManager(BaseModel):
         return True
 
     def get_all(self) -> dict:
-        return {
+        # Return lists in list_order order
+        ordered = {
             list_id: {
-                "name": lst.name,
+                "name": self.lists[list_id].name,
                 "tasks": self.get_list_tasks(list_id),
             }
-            for list_id, lst in self.lists.items()
+            for list_id in self.list_order
+            if list_id in self.lists
         }
+        return ordered
 
     def display(self) -> None:
         for lst in self.get_all().values():
@@ -322,6 +343,8 @@ def load_from_firestore(cls):
         for lst in data["lists"].values():
             lst["task_ids"] = [int(tid) for tid in lst.get("task_ids", [])]
 
+        data["list_order"] = [int(x) for x in data.get("list_order", [])]
+
     return cls.model_validate(data)
 
 
@@ -350,6 +373,7 @@ def load_task_manager(username: str) -> TaskManager:
     for lst in data["lists"].values():
         lst["task_ids"] = [int(tid) for tid in lst.get("task_ids", [])]
 
+    data["list_order"] = [int(x) for x in data.get("list_order", [])]
     data["user_id"] = username
 
     return TaskManager.model_validate(data)

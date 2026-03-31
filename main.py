@@ -56,6 +56,9 @@ class ListCreateRequest(BaseModel):
 class ListRenameRequest(BaseModel):
     name: str
 
+class ListOrderRequest(BaseModel):
+    order: list[int]
+
 class TaskCreateRequest(BaseModel):
     name: str
     description: str = ""
@@ -119,6 +122,14 @@ def create_list(body: ListCreateRequest, username: str = Depends(get_current_use
     manager = load_task_manager(username)
     list_id = manager.add_list(body.name)
     return {"list_id": list_id, "name": body.name}
+
+
+@app.put("/lists/order")
+def reorder_lists(body: ListOrderRequest, username: str = Depends(get_current_user)):
+    manager = load_task_manager(username)
+    if not manager.reorder_lists(body.order):
+        raise HTTPException(status_code=400, detail="Order must contain exactly all existing list IDs")
+    return {"message": "Order saved"}
 
 
 @app.patch("/lists/{list_id}")

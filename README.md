@@ -20,23 +20,30 @@ SyncUp is a task management web app built with FastAPI and Firestore. Users can 
 | **Validation** | Pydantic v2 |
 
 ## Project Structure
-
 ```
 .
-├── main.py                    # FastAPI app entry point & route 
+├── main.py                    # FastAPI app entry point & routes
 ├── app/
 │   ├── auth.py                # JWT token creation and validation
-│   ├── database.py            # Firestore REST API client with 
+│   ├── database.py            # Firestore REST API client
 │   ├── hash.py                # Argon2 password hashing utilities
-│   └── models.py              # UserManager, TaskManager, 
+│   └── models.py              # UserManager, TaskManager
 ├── static/
-│   ├── landingpage.html       # Public landing page
-│   ├── login.html             # Login form
-│   ├── register.html          # Registration form
-│   ├── index.html             # Main dashboard (protected)
-│   ├── main.css               # Landing/auth page styles
-│   ├── loginregister.css      # Shared auth form styles
-│   └── indexmain.css          # Dashboard styles
+│   ├── html/
+│   │   ├── landingpage.html   # Public landing page
+│   │   ├── login.html         # Login form
+│   │   ├── register.html      # Registration form
+│   │   └── index.html         # Main dashboard (protected)
+│   ├── style/
+│   │   ├── main.css           # Landing page styles
+│   │   ├── loginregister.css  # Shared auth form styles
+│   │   └── indexmain.css      # Dashboard styles
+│   ├── script/
+│   │   ├── login.js           # Login logic
+│   │   ├── register.js        # Registration logic
+│   │   └── index.js           # Dashboard logic
+│   └── imgs/
+│       └── logo.png           # Website's logo
 └── requirements.txt
 ```
 ## Setup

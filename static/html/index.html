@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SyncUp — Dashboard</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400;1,700&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+    <link rel="icon" type="image/png" href="/static/imgs/logo.png">
+    <link rel="stylesheet" href="/static/style/indexmain.css">
+</head>
+
+<body>
+
+<div class="grain"></div>
+<div class="bg-orb orb-1"></div>
+<div class="bg-orb orb-2"></div>
+<div class="bg-orb orb-3"></div>
+
+<div class="modal-overlay" id="modal-overlay">
+    <div class="modal-box">
+        <div class="modal-icon" id="modal-icon">🗑️</div>
+        <div class="modal-title" id="modal-title">Are you sure?</div>
+        <div class="modal-body"  id="modal-body">This action cannot be undone.</div>
+        <div class="modal-actions">
+            <button class="modal-btn cancel"         id="modal-cancel">Cancel</button>
+            <button class="modal-btn confirm-delete" id="modal-confirm">Delete</button>
+        </div>
+    </div>
+</div>
+
+<header>
+    <a href="/static/html/landingpage.html" class="logo">
+        <span class="logo-mark">S</span>
+        <span class="logo-text">SyncUp</span>
+    </a>
+    <nav class="nav-links">
+        <span style="color:var(--muted);font-size:14px;">
+            Hi, <span id="username-label" style="color:var(--ink);font-weight:500;"></span>
+        </span>
+        <button onclick="logout()"
+                style="margin-left:16px;background:var(--ink);color:var(--cream);padding:9px 22px;border:none;border-radius:10px;cursor:pointer;font-family:var(--font-body);font-size:14px;font-weight:500;transition:background 0.2s;"
+                onmouseover="this.style.background='#2e2010'"
+                onmouseout="this.style.background='var(--ink)'">
+            Log out
+        </button>
+    </nav>
+</header>
+
+<main>
+    <div class="dashboard-header">
+        <h1 class="dashboard-title">Your tasks,<br>perfectly in sync</h1>
+        <div class="new-list-bar">
+            <input type="text" id="new-list-name" placeholder="Create a new list…"
+                   onkeydown="if(event.key==='Enter') createList()">
+            <button onclick="createList()">Create</button>
+        </div>
+    </div>
+    <div id="loading" style="display:none;text-align:center;padding:80px;color:var(--muted);font-size:16px;">
+        Loading your workspace…
+    </div>
+    <div class="lists-grid" id="lists-grid"></div>
+</main>
+
+<div id="toast" class="toast"></div>
+
+<script src="/static/script/index.js"></script>
+
+</body>
+</html>

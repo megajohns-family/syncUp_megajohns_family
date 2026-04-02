@@ -35,3 +35,6 @@ async function doRegister(e) {
         showToast('Username already taken or invalid', 'error');
     }
 }
+if (localStorage.getItem('token')) {
+    window.location.href = '/static/html/index.html';
+}

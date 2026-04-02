@@ -27,3 +27,6 @@ async function doLogin(e) {
         showToast('Invalid username or password', 'error');
     }
 }
+if (localStorage.getItem('token')) {
+    window.location.href = '/static/html/index.html';
+}

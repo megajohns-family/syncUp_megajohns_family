@@ -35,7 +35,7 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 
 @app.get("/", include_in_schema=False)
 def root():
-    return RedirectResponse(url="/static/landingpage.html")
+    return RedirectResponse(url="/static/html/landingpage.html")
 
 
 # ---------------------------------------------------------------------------

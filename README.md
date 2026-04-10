@@ -7,9 +7,8 @@
 - Oleksandr Shybitskyi
 ## Overview
 
-SyncUp is a task management web app built with FastAPI and Firestore. Users can register, log in, and manage personal task lists with color-tagged tasks. The app features a clean, modern UI with responsive design and smooth interactions.
-**Now is online!** 
-[SyncUp](https://syncup-2tip.onrender.com)
+SyncUp is a task management web app built with FastAPI and Firestore. Users can register, log in, and manage personal task lists with color-tagged tasks. The app features a clean, modern UI with responsive design and smooth interactions.<br>
+ **Now online!** [SyncUp](https://syncup-2tip.onrender.com)
 
 ## Tech Stack
 

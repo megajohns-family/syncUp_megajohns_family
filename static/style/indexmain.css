@@ -770,7 +770,7 @@ main {
 
 .toast {
     position: fixed;
-    top: 88px; right: 28px;
+    top: 78px; right: 28px;
     padding: 14px 22px;
     border-radius: 12px;
     box-shadow: 0 15px 35px rgba(26,18,8,0.25);

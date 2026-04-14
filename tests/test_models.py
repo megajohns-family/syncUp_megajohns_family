@@ -13,9 +13,9 @@ from app.models import (
 )
 
 
-# ---------------------------------------------------------------------------
+
 # Helpers
-# ---------------------------------------------------------------------------
+
 
 def _make_manager(**kwargs) -> TaskManager:
     """Return a TaskManager with _save patched out."""
@@ -25,9 +25,8 @@ def _make_manager(**kwargs) -> TaskManager:
     return tm
 
 
-# ---------------------------------------------------------------------------
 # ColorTags
-# ---------------------------------------------------------------------------
+
 
 class TestColorTags(unittest.TestCase):
     def test_values_are_strings(self):
@@ -39,9 +38,9 @@ class TestColorTags(unittest.TestCase):
         self.assertEqual({t.value for t in ColorTags}, expected)
 
 
-# ---------------------------------------------------------------------------
+
 # Task
-# ---------------------------------------------------------------------------
+
 
 class TestTask(unittest.TestCase):
     def test_defaults(self):
@@ -56,9 +55,9 @@ class TestTask(unittest.TestCase):
         self.assertEqual(t.color_tag, ColorTags.GREEN)
 
 
-# ---------------------------------------------------------------------------
+
 # TaskList
-# ---------------------------------------------------------------------------
+
 
 class TestTaskList(unittest.TestCase):
     def test_defaults(self):
@@ -70,9 +69,9 @@ class TestTaskList(unittest.TestCase):
         self.assertEqual(tl.task_ids, [1, 2, 3])
 
 
-# ---------------------------------------------------------------------------
+
 # TaskManager
-# ---------------------------------------------------------------------------
+
 
 class TestTaskManagerLists(unittest.TestCase):
     def setUp(self):
@@ -284,9 +283,9 @@ class TestTaskManagerCounterInit(unittest.TestCase):
         self.assertEqual(tm._next_task_id, 6)
 
 
-# ---------------------------------------------------------------------------
+
 # Pydantic user models
-# ---------------------------------------------------------------------------
+
 
 class TestUserModels(unittest.TestCase):
     def test_user_fields(self):
@@ -307,9 +306,9 @@ class TestUserModels(unittest.TestCase):
         self.assertEqual(ud.login, "alice")
 
 
-# ---------------------------------------------------------------------------
+
 # UserManager
-# ---------------------------------------------------------------------------
+
 
 class TestUserManager(unittest.TestCase):
     """Tests for UserManager with Firestore fully mocked."""

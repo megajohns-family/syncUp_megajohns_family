@@ -7,6 +7,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from app.auth import create_access_token, get_current_user
+from app.database import verify_firebase_connection
 from app.models import (
     ColorTags,
     UserManager,
@@ -24,6 +25,10 @@ user_manager: UserManager
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Validate env vars and Firebase connectivity before accepting any traffic.
+    # RuntimeError here crashes the process intentionally — the server will not start.
+    verify_firebase_connection()
+
     global user_manager
     user_manager = load_from_firestore(UserManager)
     yield

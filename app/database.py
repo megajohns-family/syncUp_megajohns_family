@@ -1,101 +1,90 @@
-import time
+import json
+import os
 
-import requests
+import firebase_admin
+from dotenv import load_dotenv
+from firebase_admin import credentials, firestore
+
+load_dotenv()
 
 COLLECTION = "syncup"
 
-FIREBASE_PROJECT_ID = "syncup-3ad0e"
-FIREBASE_API_KEY = "AIzaSyCg-2nIfs54Kv_XnLk_PMD-4H9F8RhF7tU"
-
-_BASE = "https://firestore.googleapis.com/v1/projects/{project}/databases/(default)/documents/{collection}/{doc_id}"
-
-# Connection pooling — reuses TCP connections across requests
-_session = requests.Session()
-
-# Simple in-memory cache: {doc_id: (data, timestamp)}
-_cache: dict[str, tuple[dict | None, float]] = {}
-CACHE_TTL_SECONDS = 5
+_db = None
 
 
-def _to_value(v) -> dict:
-    if v is None:
-        return {"nullValue": None}
-    if isinstance(v, bool):
-        return {"booleanValue": v}
-    if isinstance(v, int):
-        return {"integerValue": str(v)}
-    if isinstance(v, float):
-        return {"doubleValue": v}
-    if isinstance(v, str):
-        return {"stringValue": v}
-    if isinstance(v, list):
-        return {"arrayValue": {"values": [_to_value(i) for i in v]}}
-    if isinstance(v, dict):
-        return {"mapValue": {"fields": {k: _to_value(val) for k, val in v.items()}}}
-    raise TypeError(f"Unsupported type for Firestore: {type(v)}")
+def _get_db():
+    global _db
+    if _db is None:
+        raise RuntimeError("Firestore client not initialized. Call verify_firebase_connection() first.")
+    return _db
 
 
-def _from_value(v: dict):
-    if "nullValue" in v:
-        return None
-    if "booleanValue" in v:
-        return v["booleanValue"]
-    if "integerValue" in v:
-        return int(v["integerValue"])
-    if "doubleValue" in v:
-        return float(v["doubleValue"])
-    if "stringValue" in v:
-        return v["stringValue"]
-    if "timestampValue" in v:
-        return v["timestampValue"]
-    if "arrayValue" in v:
-        return [_from_value(i) for i in v["arrayValue"].get("values", [])]
-    if "mapValue" in v:
-        return {k: _from_value(val) for k, val in v["mapValue"].get("fields", {}).items()}
-    raise ValueError(f"Unknown Firestore value type: {v}")
+def verify_firebase_connection() -> None:
+    """
+    Called once at startup. Validates all required env vars, initializes the
+    Firebase Admin SDK using the Service Account JSON, and performs a test
+    request to confirm connectivity. Raises RuntimeError on any failure —
+    the server will not start.
+    """
+    global _db
 
+    # 1. Check required env vars
+    missing = []
+    for var in ("FIREBASE_SERVICE_ACCOUNT", "SECRET_KEY"):
+        if not os.getenv(var):
+            missing.append(var)
+    if missing:
+        raise RuntimeError(
+            f"Missing required environment variables: {', '.join(missing)}"
+        )
 
-def _dict_to_fields(data: dict) -> dict:
-    return {k: _to_value(v) for k, v in data.items()}
+    # 2. Parse Service Account JSON
+    raw = os.getenv("FIREBASE_SERVICE_ACCOUNT")
+    try:
+        service_account_info = json.loads(raw)
+    except json.JSONDecodeError as e:
+        raise RuntimeError(
+            f"FIREBASE_SERVICE_ACCOUNT is not valid JSON: {e}"
+        ) from e
 
+    # 3. Initialize Firebase Admin SDK (only once)
+    if not firebase_admin._apps:
+        try:
+            cred = credentials.Certificate(service_account_info)
+            firebase_admin.initialize_app(cred)
+        except Exception as e:
+            raise RuntimeError(
+                f"Failed to initialize Firebase Admin SDK: {e}"
+            ) from e
 
-def _fields_to_dict(fields: dict) -> dict:
-    return {k: _from_value(v) for k, v in fields.items()}
+    # 4. Initialize Firestore client
+    try:
+        _db = firestore.client()
+    except Exception as e:
+        raise RuntimeError(f"Failed to create Firestore client: {e}") from e
 
-
-def _doc_url(doc_id: str) -> str:
-    return _BASE.format(project=FIREBASE_PROJECT_ID, collection=COLLECTION, doc_id=doc_id)
+    # 5. Test actual connectivity
+    try:
+        _db.collection(COLLECTION).document("_health_check").get()
+    except Exception as e:
+        raise RuntimeError(
+            f"Firestore connectivity test failed: {e}"
+        ) from e
 
 
 # --- Public API ---
 
 def save_to_firestore(doc_id: str, data: dict) -> None:
-    url = _doc_url(doc_id)
-    body = {"fields": _dict_to_fields(data)}
-    resp = _session.patch(url, json=body, params={"key": FIREBASE_API_KEY})
-    resp.raise_for_status()
-    # Update cache with the data we just wrote
-    _cache[doc_id] = (data, time.monotonic())
+    _get_db().collection(COLLECTION).document(doc_id).set(data)
 
 
 def invalidate_cache(doc_id: str) -> None:
-    _cache.pop(doc_id, None)
+    # Cache removed — firebase-admin handles connection pooling internally
+    pass
 
 
 def load_from_firestore_raw(doc_id: str) -> dict | None:
-    # Return cached data if fresh enough
-    if doc_id in _cache:
-        cached_data, cached_at = _cache[doc_id]
-        if time.monotonic() - cached_at < CACHE_TTL_SECONDS:
-            return cached_data
-
-    url = _doc_url(doc_id)
-    resp = _session.get(url, params={"key": FIREBASE_API_KEY})
-    if resp.status_code == 404:
-        _cache[doc_id] = (None, time.monotonic())
+    doc = _get_db().collection(COLLECTION).document(doc_id).get()
+    if not doc.exists:
         return None
-    resp.raise_for_status()
-    data = resp.json()
-    result = _fields_to_dict(data.get("fields", {}))
-    _cache[doc_id] = (result, time.monotonic())
-    return result
+    return doc.to_dict()

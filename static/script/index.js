@@ -1,11 +1,44 @@
-
 const API = '';
 const getToken  = () => localStorage.getItem('token');
 const getUser   = () => localStorage.getItem('username');
 const clearAuth = () => localStorage.clear();
+const boardId = localStorage.getItem('boardId');
+if (!boardId) {
+    showToast("No board selected", "error");
+    window.location.href = '/static/html/boards.html';
+}
+
+// window.onload = () => {
+//     if (!getToken()) return window.location.href = '/static/html/login.html';
+//     document.getElementById('username-label').textContent = getUser() || 'User';
+//     loadLists();
+// };
+
+function requireBoard() {
+    const boardId = localStorage.getItem('boardId');
+
+    if (!boardId) {
+        showToast("No board selected", "error")
+        window.location.replace('/static/html/landingpage.html');
+        return null;
+    }
+
+    return boardId;
+}
+
+// function getBoardId() {
+//     return localStorage.getItem('boardId');
+// }
 
 window.onload = () => {
-    if (!getToken()) return window.location.href = '/static/html/login.html';
+    if (!getToken()) {
+        window.location.replace('/static/html/boards.html');
+        return;
+    }
+
+    const boardId = requireBoard();
+    if (!boardId) return;
+
     document.getElementById('username-label').textContent = getUser() || 'User';
     loadLists();
 };
@@ -79,7 +112,7 @@ const COLORS = [
 async function loadLists() {
     document.getElementById('loading').style.display = '';
     document.getElementById('lists-grid').innerHTML = '';
-    const res = await apiFetch('/lists');
+    const res = await apiFetch(`/boards/${boardId}/lists`);
     document.getElementById('loading').style.display = 'none';
     if (!res) return;
     const data = await res.json();
@@ -209,7 +242,7 @@ document.addEventListener('click', closeAllDropdowns);
 
 async function setColor(taskId, colorId) {
     closeAllDropdowns();
-    const res = await apiFetch(`/tasks/${taskId}`, {
+    const res = await apiFetch(`/boards/${boardId}/tasks/${taskId}`, {
         method: 'PATCH',
         body: JSON.stringify({ color_tag: colorId })
     });
@@ -243,7 +276,7 @@ document.addEventListener('dblclick', e => {
             ? { name: newVal || original }
             : { description: newVal };
 
-        const res = await apiFetch(`/tasks/${taskId}`, {
+        const res = await apiFetch(`/boards/${boardId}/tasks/${taskId}`, {
             method: 'PATCH',
             body: JSON.stringify(body)
         });
@@ -308,9 +341,9 @@ function setupTaskDropZone(el, listId) {
 
         if (String(sourceListId) === String(listId)) return;
 
-        const res = await apiFetch(`/tasks/${dragTaskId}/move`, {
-            method: 'POST',
-            body: JSON.stringify({ target_list_id: parseInt(listId) })
+        const res = await apiFetch(`/boards/${boardId}/tasks/${dragTaskId}/move`, {
+        method: 'POST',
+        body: JSON.stringify({ target_list_id: parseInt(listId) })
         });
         if (res?.ok) { showToast('Task moved ✓', 'success'); loadLists(); }
         else showToast('Could not move task', 'error');
@@ -375,7 +408,7 @@ function initListDragDrop() {
         cleanupListDrag();
 
 
-        const res = await apiFetch('/lists/order', {
+        const res = await apiFetch(`/boards/${boardId}/lists/order`, {
             method: 'PUT',
             body: JSON.stringify({ order: newOrder })
         });
@@ -402,10 +435,10 @@ async function createList() {
     const name  = input.value.trim();
     if (!name) return;
     input.value = '';
-    const res = await apiFetch('/lists', {
-        method: 'POST',
-        body: JSON.stringify({ name })
-    });
+    const res = await apiFetch(`/boards/${boardId}/lists`, {
+    method: 'POST',
+    body: JSON.stringify({ name })
+});
     if (res?.ok)  { showToast('List created ✓', 'success'); loadLists(); }
     else showToast('Failed to create list', 'error');
 }
@@ -418,7 +451,7 @@ async function confirmDeleteList(listId, listName) {
         confirmLabel: 'Delete list',
     });
     if (!ok) return;
-    const res = await apiFetch(`/lists/${listId}`, { method: 'DELETE' });
+    const res = await apiFetch(`/boards/${boardId}/lists/${listId}`, {method: 'DELETE'});
     if (res?.ok)  { showToast('List deleted', 'info'); loadLists(); }
     else showToast('Failed to delete list', 'error');
 }
@@ -428,9 +461,9 @@ async function createTask(listId) {
     const name  = input.value.trim();
     if (!name) return;
     input.value = '';
-    const res = await apiFetch(`/lists/${listId}/tasks`, {
-        method: 'POST',
-        body: JSON.stringify({ name, description: '' })
+    const res = await apiFetch(`/boards/${boardId}/lists/${listId}/tasks`, {
+    method: 'POST',
+    body: JSON.stringify({ name, description: '' })
     });
     if (res?.ok)  { showToast('Task added ✓', 'success'); loadLists(); }
     else showToast('Failed to add task', 'error');
@@ -444,7 +477,8 @@ async function confirmDeleteTask(taskId, taskName) {
         confirmLabel: 'Delete task',
     });
     if (!ok) return;
-    const res = await apiFetch(`/tasks/${taskId}`, { method: 'DELETE' });
+    const res = await apiFetch(`/boards/${boardId}/tasks/${taskId}`, { method: 'DELETE' });
     if (res?.ok)  { showToast('Task deleted', 'info'); loadLists(); }
     else showToast('Failed to delete task', 'error');
 }
+

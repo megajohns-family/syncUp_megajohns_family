@@ -21,6 +21,7 @@ async function doLogin(e) {
         const data = await res.json();
         localStorage.setItem('token', data.access_token);
         localStorage.setItem('username', login);
+        localStorage.setItem('boardId', '1');
         showToast('Welcome back!', 'success');
         setTimeout(() => window.location.href = '/static/html/index.html', 800);
     } else {

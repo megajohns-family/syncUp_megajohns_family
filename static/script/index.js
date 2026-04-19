@@ -1,47 +1,50 @@
 const API = '';
+const boardId = localStorage.getItem('boardId') || 'tasks_test';
 const getToken  = () => localStorage.getItem('token');
 const getUser   = () => localStorage.getItem('username');
 const clearAuth = () => localStorage.clear();
-const boardId = localStorage.getItem('boardId');
-if (!boardId) {
-    showToast("No board selected", "error");
-    window.location.href = '/static/html/boards.html';
-}
 
-// window.onload = () => {
-//     if (!getToken()) return window.location.href = '/static/html/login.html';
-//     document.getElementById('username-label').textContent = getUser() || 'User';
-//     loadLists();
-// };
+window.onload = () => {
+    if (!getToken()) return window.location.href = '/static/html/login.html';
+    document.getElementById('username-label').textContent = getUser() || 'User';
+    loadLists();
+};
 
-function requireBoard() {
-    const boardId = localStorage.getItem('boardId');
+// function requireBoard() {
+//     const boardId = localStorage.getItem('boardId');
 
-    if (!boardId) {
-        showToast("No board selected", "error")
-        window.location.replace('/static/html/landingpage.html');
-        return null;
-    }
+//     if (!boardId || boardId === "null" || boardId === "undefined") {
+//         console.warn("No board selected");
+//         window.location.replace('/static/html/boards.html');
+//         return null;
+//     }
 
-    return boardId;
-}
-
+//     return boardId;
+// }
 // function getBoardId() {
 //     return localStorage.getItem('boardId');
 // }
 
-window.onload = () => {
-    if (!getToken()) {
-        window.location.replace('/static/html/boards.html');
-        return;
-    }
+// window.onload = () => {
+//     if (!getToken()) {
+//         window.location.replace('/static/html/login.html');
+//         return;
+//     }
 
-    const boardId = requireBoard();
-    if (!boardId) return;
+    // const boardId = requireBoard();
+    // if (!boardId) {
+    //     showToast("No board selected", "error");
 
-    document.getElementById('username-label').textContent = getUser() || 'User';
-    loadLists();
-};
+    //     setTimeout(() => {
+    //         window.location.replace('/static/html/boards.html');
+    //     }, 800);
+
+    //     return;
+    // }
+
+//     document.getElementById('username-label').textContent = getUser() || 'User';
+//     loadLists();
+// };
 
 function logout() {
     clearAuth();
@@ -482,3 +485,97 @@ async function confirmDeleteTask(taskId, taskName) {
     else showToast('Failed to delete task', 'error');
 }
 
+const ws = new WebSocket(`ws://${location.host}/ws/${boardId}?token=${getToken()}`);
+
+ws.onmessage = (e) => {
+    const { event } = JSON.parse(e.data);
+    loadLists();
+};
+
+ws.onclose = () => {
+    setTimeout(() => location.reload(), 2000);
+};
+
+ws.onmessage = (e) => {
+    const { event, data } = JSON.parse(e.data);
+    loadLists();
+
+    const messages_success = {
+        color_updated: `Color updated`,
+        list_created: `New list added`,
+        task_created: `New task added`,
+        task_moved:  `Task moved`,
+    };
+
+    const messages_info = {
+        list_deleted: `List deleted`,
+        task_deleted: `Task removed`,
+    };
+
+    if(event == "user_added"){
+        if(getUser == data.username){
+            showToast("You were added to the board", "success")
+        }
+        else{
+            showToast("User added", "success")
+        }
+    }
+    else if(event == "user_deleted"){
+        if(getUser == data.username){
+            showToast("You were deleted from the board", "info")
+            setTimeout(() => window.location.href = '/static/html/boards.html', 1500);
+            return;
+        }
+        else{
+            showToast("User deleted", "info")
+        }
+    }
+
+    if (event in messages_success) showToast(messages_success[event] || "Board updated", "success");
+    else if (event in messages_info) showToast(messages_info[event] || "Board updated", "info");
+};
+
+function showAddUserModal() {
+    document.getElementById('add-user-input').value = '';
+    document.getElementById('add-user-overlay').classList.add('open');
+    document.getElementById('add-user-input').focus();
+}
+
+function closeAddUserModal() {
+    document.getElementById('add-user-overlay').classList.remove('open');
+}
+
+async function confirmAddUser() {
+    const username = document.getElementById('add-user-input').value.trim();
+    if (!username) return;
+    closeAddUserModal();
+    const res = await apiFetch(`/boards/${boardId}/users`, {
+        method: 'POST',
+        body: JSON.stringify({ username })
+    });
+    if (res.ok) showToast('User added ✓', 'success');
+    else if (res.status === 403) showToast('Only owner can add users', 'error');
+    else showToast('Failed to add user', 'error');
+};
+
+async function showUsersModal() {
+    const res = await apiFetch(`/boards/${boardId}/users`);
+    const data = await res.json();
+    const list = document.getElementById('users-list');
+
+    list.innerHTML = data.users.length
+        ? data.users.map(u => `
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--muted);">
+                <span>${u} ${u === data.owner ? '👑' : ''}</span>
+                ${u !== data.owner ? `<button onclick="removeUser('${u}')" style="background:none;border:none;cursor:pointer;color:#d9534f;font-size:16px;">✕</button>` : ''}
+            </div>`).join('')
+        : '<p style="color:var(--muted)">No users yet.</p>';
+
+    document.getElementById('users-overlay').classList.add('open');
+}
+
+async function removeUser(username) {
+    const res = await apiFetch(`/boards/${boardId}/users/${username}`, { method: 'DELETE' });
+    if (res.ok) { showToast('User removed', 'info'); showUsersModal(); }
+    else showToast('Failed to remove user', 'error');
+}

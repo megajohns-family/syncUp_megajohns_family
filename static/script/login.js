@@ -21,13 +21,13 @@ async function doLogin(e) {
         const data = await res.json();
         localStorage.setItem('token', data.access_token);
         localStorage.setItem('username', login);
-        localStorage.setItem('boardId', '1');
+        localStorage.setItem('boardId', 'tasks_test');
         showToast('Welcome back!', 'success');
-        setTimeout(() => window.location.href = '/static/html/index.html', 800);
+        setTimeout(() => window.location.href = '/static/html/boards.html', 800);
     } else {
         showToast('Invalid username or password', 'error');
     }
 }
 if (localStorage.getItem('token')) {
-    window.location.href = '/static/html/index.html';
+    window.location.href = '/static/html/boards.html';
 }

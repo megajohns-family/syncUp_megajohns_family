@@ -35,7 +35,9 @@ class TaskList(BaseModel):
 
 class TaskManager(BaseModel):
     board_id: str = ""
-
+    owner: str = ""
+    name: str = ""
+    users: list[str] = Field(default_factory=list)
     lists: dict[int, TaskList] = Field(default_factory=dict)
     tasks: dict[int, Task] = Field(default_factory=dict)
     list_order: list[int] = Field(default_factory=list)
@@ -245,6 +247,8 @@ class TaskManager(BaseModel):
             for list_id in self.list_order
             if list_id in self.lists
         }
+    def get_board_name(self):
+        return self.board_id
 
 
 # ---------------------------------------------------------------------------

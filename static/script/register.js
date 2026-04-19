@@ -29,12 +29,13 @@ async function doRegister(e) {
         const data = await loginRes.json();
         localStorage.setItem('token', data.access_token);
         localStorage.setItem('username', login);
+        localStorage.setItem('boardId', 'tasks_test');
 
-        setTimeout(() => window.location.href = '/static/html/index.html', 1000);
+        setTimeout(() => window.location.href = '/static/html/boards.html', 1000);
     } else {
         showToast('Username already taken or invalid', 'error');
     }
 }
 if (localStorage.getItem('token')) {
-    window.location.href = '/static/html/index.html';
+    window.location.href = '/static/html/boards.html';
 }

@@ -3,9 +3,36 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Boards page</title>
+    <title>SyncUp — Boards</title>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style/main.css">
 </head>
 <body>
-    <h2>Test page for redirect when no Boards</h2>
+    <div class="grain"></div>
+    <div class="bg-orb orb-1"></div>
+    <div class="bg-orb orb-2"></div>
+
+    <header>
+        <a href="/static/html/landingpage.html" class="logo">
+            <span class="logo-mark">S</span>
+            <span class="logo-text">SyncUp</span>
+        </a>
+        <nav class="nav-links">
+            <span style="color:var(--muted);font-size:14px;">Hi, <span id="username-label"></span></span>
+            <button onclick="logout()">Log out</button>
+        </nav>
+    </header>
+
+    <main style="max-width:700px;margin:60px auto;padding:0 24px;">
+        <h1>Your Boards</h1>
+        <div style="display:flex;gap:12px;margin:24px 0;">
+            <input id="new-board-name" type="text" placeholder="New board name…" onkeydown="if(event.key==='Enter')createBoard()">
+            <button onclick="createBoard()">Create</button>
+        </div>
+        <div id="boards-list"></div>
+    </main>
+
+    <div id="toast" class="toast"></div>
+    <script src="/static/script/boards.js"></script>
 </body>
 </html>

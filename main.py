@@ -8,9 +8,10 @@ from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from app.database import verify_firebase_connection
-from app.auth import create_access_token, get_current_user
+from app.database import verify_firebase_connection, save_to_firestore, get_user_boards
+from app.auth import create_access_token, get_current_user, decode_token
 from app.models import (
+    TaskManager,
     UserManager,
     load_task_manager
 )
@@ -46,14 +47,20 @@ def root():
 class ConnectionManager:
     def __init__(self):
         self.rooms: dict[str, List[WebSocket]] = defaultdict(list)
+        self.users: dict[WebSocket, str] = {}  # ws -> username
 
-    async def connect(self, websocket: WebSocket, board_id: str):
+    async def connect(self, websocket: WebSocket, board_id: str, username: str):
         await websocket.accept()
         self.rooms[board_id].append(websocket)
+        self.users[websocket] = username
 
     def disconnect(self, websocket: WebSocket, board_id: str):
         if websocket in self.rooms[board_id]:
             self.rooms[board_id].remove(websocket)
+        self.users.pop(websocket, None)
+
+    def get_active_users(self, board_id: str) -> list[str]:
+        return [self.users[ws] for ws in self.rooms.get(board_id, []) if ws in self.users]
 
     async def broadcast(self, board_id: str, message: dict):
         if board_id not in self.rooms:
@@ -73,9 +80,12 @@ class ConnectionManager:
 manager_ws = ConnectionManager()
 
 @app.websocket("/ws/{board_id}")
-async def websocket_endpoint(websocket: WebSocket, board_id: str):
-    await manager_ws.connect(websocket, board_id)
-
+async def websocket_endpoint(websocket: WebSocket, board_id: str, token: str):
+    username = decode_token(token)
+    if not username:
+        await websocket.close()
+        return
+    await manager_ws.connect(websocket, board_id, username)
     try:
         while True:
             await websocket.receive_text()
@@ -122,7 +132,6 @@ def login(body: UserCredentials):
         "access_token": create_access_token(body.login),
         "token_type": "bearer"
     }
-
 # ---------------------------------------------------------------------------
 # BOARD HELPERS
 # ---------------------------------------------------------------------------
@@ -132,6 +141,58 @@ def get_board(board_id: str):
     if not manager:
         raise HTTPException(status_code=404, detail="Board not found")
     return manager
+
+class BoardCreateRequest(BaseModel):
+    name: str
+
+@app.get("/boards")
+def list_boards(username: str = Depends(get_current_user)):
+    return get_user_boards(username)
+
+@app.post("/boards", status_code=201)
+def create_board(body: BoardCreateRequest, username: str = Depends(get_current_user)):
+    import uuid
+    board_id = str(uuid.uuid4())[:8]
+    manager = TaskManager(board_id=board_id, name=body.name, owner=username, users=[])
+    save_to_firestore("boards", f"board_{board_id}", manager.model_dump(mode="json"))
+    return {"board_id": board_id}
+
+class BoardAddUserRequest(BaseModel):
+    username: str
+
+@app.post("/boards/{board_id}/users")
+async def add_user_to_board(board_id: str, body: BoardAddUserRequest, username: str = Depends(get_current_user)):
+    manager = get_board(board_id)
+    if username != manager.owner:
+        raise HTTPException(status_code=403, detail="Only owner can add users")
+    if body.username not in manager.users:
+        manager.users.append(body.username)
+        manager._save()
+        await manager_ws.broadcast(board_id, {
+        "event": "user_added",
+        "data": {"username": username}
+        })
+    return {"ok": True}
+
+@app.get("/boards/{board_id}/users")
+def get_board_users(board_id: str, username: str = Depends(get_current_user)):
+    manager = get_board(board_id)
+    return {"owner": manager.owner, "users": manager.users}
+
+@app.delete("/boards/{board_id}/users/{target_username}")
+async def remove_user_from_board(board_id: str, target_username: str, username: str = Depends(get_current_user)):
+    manager = get_board(board_id)
+    print(f"requesting user: {username}, owner: {manager.owner}")
+    if username != manager.owner:
+        raise HTTPException(status_code=403, detail="Only owner can remove users")
+    if target_username in manager.users:
+        manager.users.remove(target_username)
+        manager._save()
+    await manager_ws.broadcast(board_id, {
+        "event": "user_removed",
+        "data": {"username": target_username}
+    })
+    return {"ok": True}
 
 # ---------------------------------------------------------------------------
 # LISTS
@@ -237,3 +298,33 @@ def update_task(board_id: str, task_id: int, body: dict):
         manager.change_color_tag(task_id, body["color_tag"])
 
     return {"ok": True}
+
+@app.delete("/boards/{board_id}/tasks/{task_id}")
+async def delete_task(board_id: str, task_id: int):
+    manager = get_board(board_id)
+    manager.remove_task(task_id)
+    await manager_ws.broadcast(board_id, {
+        "event": "task_deleted",
+        "data": {"task_id": task_id}
+    })
+    return {"ok": True}
+
+@app.put("/boards/{board_id}/lists/order")
+async def reorder_lists(board_id: str, body: dict):
+    manager = get_board(board_id)
+    if not manager.reorder_lists(body["order"]):
+        raise HTTPException(status_code=400, detail="Invalid order")
+    await manager_ws.broadcast(board_id, {
+        "event": "lists_reordered",
+        "data": {"order": body["order"]}
+    })
+    return {"ok": True}
+
+@app.get("/board_name")
+def load_board():
+    return {"board_name" : get_board("tasks_test")}
+
+#3 accounts
+#Showcase - owner
+#Showcase2, Showcase3 - users
+#Same pw: Showcase

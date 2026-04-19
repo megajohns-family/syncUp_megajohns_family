@@ -31,3 +31,10 @@ def get_current_user(token: str = Depends(oauth2_scheme)) -> str:
         raise HTTPException(status_code=401, detail="Token expired")
     except jwt.InvalidTokenError:
         raise HTTPException(status_code=401, detail="Invalid token")
+
+def decode_token(token: str) -> str | None:
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        return payload.get("sub")
+    except jwt.InvalidTokenError:
+        return None

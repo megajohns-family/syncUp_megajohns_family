@@ -108,3 +108,19 @@ def delete_from_firestore(collection: str, doc_id: str) -> None:
     Optional helper for future use.
     """
     _get_db().collection(collection).document(doc_id).delete()
+
+def get_user_boards(username: str) -> list[dict]:
+    db = _get_db()
+    boards = []
+    owned = db.collection("boards").where("owner", "==", username).stream()
+    for doc in owned:
+        d = doc.to_dict()
+        bid = doc.id.replace("board_", "")
+        boards.append({"id": bid, "name": d.get("name", bid), "owner": d.get("owner", "")})
+    shared = db.collection("boards").where("users", "array_contains", username).stream()
+    for doc in shared:
+        d = doc.to_dict()
+        bid = doc.id.replace("board_", "")
+        if not any(b["id"] == bid for b in boards):
+            boards.append({"id": bid, "name": d.get("name", bid), "owner": d.get("owner", "")})
+    return boards

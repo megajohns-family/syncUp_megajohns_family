@@ -547,7 +547,9 @@ async function confirmDeleteTask(taskId, taskName) {
     else showToast('Failed to delete task', 'error');
 }
 
-const ws = new WebSocket(`ws://${location.host}/ws/${boardId}?token=${getToken()}`);
+const ws = new WebSocket(`wss://${location.host}/ws/${boardId}?token=${getToken()}`);
+
+setInterval(loadLists, 5000);
 
 ws.onmessage = (e) => {
     const { event } = JSON.parse(e.data);

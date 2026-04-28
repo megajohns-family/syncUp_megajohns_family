@@ -695,6 +695,70 @@ main {
     box-shadow: 0 0 0 2px rgba(200,133,42,0.3);
 }
 .task-desc-placeholder { color: #c0a888; font-style: italic; }
+
+.task-due-wrap { margin-top: 4px; }
+.due-date-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    font-family: var(--font-body);
+    border: none;
+    border-radius: 10px;
+    padding: 2px 8px;
+    cursor: pointer;
+    transition: opacity 0.15s, background 0.15s;
+}
+.due-date-empty {
+    background: transparent;
+    color: #c0a888;
+    opacity: 0;
+}
+.task-item:hover .due-date-empty { opacity: 1; }
+.due-overdue { background: rgba(200,50,50,0.12); color: #c03232; font-weight: 600; }
+.due-today   { background: rgba(200,133,42,0.18); color: var(--amber); font-weight: 600; }
+.due-soon    { background: rgba(200,133,42,0.10); color: var(--amber); }
+.due-future  { background: rgba(26,18,8,0.06); color: var(--muted); }
+
+.date-picker-popup {
+    position: absolute;
+    z-index: 9999;
+    background: var(--cream);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 12px;
+    box-shadow: 0 8px 24px rgba(26,18,8,0.15);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 180px;
+}
+.date-picker-input {
+    font-family: var(--font-body);
+    font-size: 13px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 5px 8px;
+    background: white;
+    color: var(--ink);
+    width: 100%;
+}
+.date-picker-actions {
+    display: flex;
+    gap: 6px;
+    justify-content: flex-end;
+}
+.date-picker-clear, .date-picker-save {
+    font-family: var(--font-body);
+    font-size: 12px;
+    border: none;
+    border-radius: 6px;
+    padding: 4px 10px;
+    cursor: pointer;
+}
+.date-picker-clear { background: rgba(26,18,8,0.06); color: var(--muted); }
+.date-picker-save  { background: var(--amber); color: white; font-weight: 600; }
+
 .task-actions {
     display: flex;
     gap: 2px;

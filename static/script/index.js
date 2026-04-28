@@ -549,8 +549,6 @@ async function confirmDeleteTask(taskId, taskName) {
 
 const ws = new WebSocket(`wss://${location.host}/ws/${boardId}?token=${getToken()}`);
 
-setInterval(loadLists, 5000);
-
 ws.onmessage = (e) => {
     const { event } = JSON.parse(e.data);
     loadLists();

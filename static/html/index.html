@@ -30,9 +30,32 @@
         </div>
     </div>
 </div>
+<div class="modal-overlay" id="add-user-overlay">
+    <div class="modal-box">
+        <div class="modal-icon">👤</div>
+        <div class="modal-title">Add user to board</div>
+        <input id="add-user-input" type="text" placeholder="Username…"
+               style="width:100%;margin:12px 0;padding:10px 14px;border-radius:8px;border:1px solid var(--muted);font-family:var(--font-body);font-size:14px;background:var(--surface);color:var(--ink);"
+               onkeydown="if(event.key==='Enter') confirmAddUser()">
+        <div class="modal-actions">
+            <button class="modal-btn cancel" onclick="closeAddUserModal()">Cancel</button>
+            <button class="modal-btn confirm-delete" onclick="confirmAddUser()">Add</button>
+        </div>
+    </div>
+</div>
+<div class="modal-overlay" id="users-overlay">
+    <div class="modal-box">
+        <div class="modal-icon">👥</div>
+        <div class="modal-title">Board users</div>
+        <div id="users-list" style="margin:12px 0;max-height:200px;overflow-y:auto;"></div>
+        <div class="modal-actions">
+            <button class="modal-btn cancel" onclick="document.getElementById('users-overlay').classList.remove('open')">Close</button>
+        </div>
+    </div>
+</div>
 
 <header>
-    <a href="/static/html/landingpage.html" class="logo">
+    <a href="/static/html/boards.html" class="logo">
         <span class="logo-mark">S</span>
         <span class="logo-text">SyncUp</span>
     </a>
@@ -40,6 +63,14 @@
         <span style="color:var(--muted);font-size:14px;">
             Hi, <span id="username-label" style="color:var(--ink);font-weight:500;"></span>
         </span>
+        <button onclick="showUsersModal()"
+        style="margin-left:8px;background:transparent;color:var(--ink);padding:9px 22px;border:1px solid var(--ink);border-radius:10px;cursor:pointer;font-family:var(--font-body);font-size:14px;font-weight:500;">
+        👥 Users
+        </button>
+        <button onclick="showAddUserModal()"
+            style="margin-left:16px;background:transparent;color:var(--ink);padding:9px 22px;border:1px solid var(--ink);border-radius:10px;cursor:pointer;font-family:var(--font-body);font-size:14px;font-weight:500;">
+        + Add user
+        </button>
         <button onclick="logout()"
                 style="margin-left:16px;background:var(--ink);color:var(--cream);padding:9px 22px;border:none;border-radius:10px;cursor:pointer;font-family:var(--font-body);font-size:14px;font-weight:500;transition:background 0.2s;"
                 onmouseover="this.style.background='#2e2010'"

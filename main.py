@@ -1,59 +1,100 @@
 from contextlib import asynccontextmanager
-from typing import Optional
+from typing import List
+from collections import defaultdict
+import asyncio
 
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from app.auth import create_access_token, get_current_user
-from app.database import verify_firebase_connection
+from app.database import verify_firebase_connection, save_to_firestore, get_user_boards
+from app.auth import create_access_token, get_current_user, decode_token
 from app.models import (
-    ColorTags,
+    TaskManager,
     UserManager,
-    load_from_firestore,
-    load_task_manager,
+    load_task_manager
 )
 
-
 # ---------------------------------------------------------------------------
-# App lifecycle
+# APP LIFECYCLE
 # ---------------------------------------------------------------------------
 
 user_manager: UserManager
 
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Validate env vars and Firebase connectivity before accepting any traffic.
-    # RuntimeError here crashes the process intentionally — the server will not start.
-    verify_firebase_connection()
-
     global user_manager
-    user_manager = load_from_firestore(UserManager)
+    verify_firebase_connection()
+    user_manager = UserManager()
     yield
-
 
 app = FastAPI(lifespan=lifespan)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
+# ---------------------------------------------------------------------------
+# ROOT
+# ---------------------------------------------------------------------------
 
-@app.get("/", include_in_schema=False)
+@app.get("/")
 def root():
     return RedirectResponse(url="/static/html/landingpage.html")
 
+# ---------------------------------------------------------------------------
+# WEBSOCKET (BOARD ROOMS)
+# ---------------------------------------------------------------------------
+
+class ConnectionManager:
+    def __init__(self):
+        self.rooms: dict[str, List[WebSocket]] = defaultdict(list)
+        self.users: dict[WebSocket, str] = {}  # ws -> username
+
+    async def connect(self, websocket: WebSocket, board_id: str, username: str):
+        await websocket.accept()
+        self.rooms[board_id].append(websocket)
+        self.users[websocket] = username
+
+    def disconnect(self, websocket: WebSocket, board_id: str):
+        if websocket in self.rooms[board_id]:
+            self.rooms[board_id].remove(websocket)
+        self.users.pop(websocket, None)
+
+    def get_active_users(self, board_id: str) -> list[str]:
+        return [self.users[ws] for ws in self.rooms.get(board_id, []) if ws in self.users]
+
+    async def broadcast(self, board_id: str, message: dict):
+        if board_id not in self.rooms:
+            return
+
+        dead = []
+
+        for ws in self.rooms[board_id]:
+            try:
+                await ws.send_json(message)
+            except Exception:
+                dead.append(ws)
+
+        for ws in dead:
+            self.rooms[board_id].remove(ws)
+
+manager_ws = ConnectionManager()
+
+@app.websocket("/ws/{board_id}")
+async def websocket_endpoint(websocket: WebSocket, board_id: str, token: str):
+    username = decode_token(token)
+    if not username:
+        await websocket.close()
+        return
+    await manager_ws.connect(websocket, board_id, username)
+    try:
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        manager_ws.disconnect(websocket, board_id)
 
 # ---------------------------------------------------------------------------
-# Request / response schemas
+# SCHEMAS
 # ---------------------------------------------------------------------------
-
-class UserCredentials(BaseModel):
-    login: str
-    password: str
-
-class ChangePasswordRequest(BaseModel):
-    old_password: str
-    new_password: str
 
 class ListCreateRequest(BaseModel):
     name: str
@@ -61,138 +102,229 @@ class ListCreateRequest(BaseModel):
 class ListRenameRequest(BaseModel):
     name: str
 
-class ListOrderRequest(BaseModel):
-    order: list[int]
-
 class TaskCreateRequest(BaseModel):
     name: str
     description: str = ""
 
-class TaskUpdateRequest(BaseModel):
-    name: Optional[str] = None
-    description: Optional[str] = None
-    color_tag: Optional[ColorTags] = None
-
 class TaskMoveRequest(BaseModel):
     target_list_id: int
 
+class UserCredentials(BaseModel):
+    login: str
+    password: str
 
 # ---------------------------------------------------------------------------
-# Auth routes (public)
+# AUTH
 # ---------------------------------------------------------------------------
 
 @app.post("/users/register", status_code=201)
 def register(body: UserCredentials):
     if not user_manager.register_user(body.login, body.password):
-        raise HTTPException(status_code=400, detail="Login already taken or invalid input")
-    return {"message": f"User '{body.login}' registered successfully"}
-
+        raise HTTPException(status_code=400, detail="User exists or invalid data")
+    return {"message": "registered"}
 
 @app.post("/users/login")
 def login(body: UserCredentials):
     if not user_manager.login_user(body.login, body.password):
-        raise HTTPException(status_code=401, detail="Invalid login or password")
-    token = create_access_token(body.login)
-    return {"access_token": token, "token_type": "bearer"}
+        raise HTTPException(status_code=401, detail="Invalid credentials")
 
-
-@app.post("/users/change-password")
-def change_password(body: ChangePasswordRequest, username: str = Depends(get_current_user)):
-    if not user_manager.change_password(username, body.old_password, body.new_password):
-        raise HTTPException(status_code=400, detail="Old password incorrect or user not found")
-    return {"message": "Password changed successfully"}
-
-
-@app.delete("/users/me")
-def delete_account(body: UserCredentials, username: str = Depends(get_current_user)):
-    if body.login != username:
-        raise HTTPException(status_code=403, detail="Cannot delete another user's account")
-    if not user_manager.delete_account(body.login, body.password):
-        raise HTTPException(status_code=400, detail="Wrong password")
-    return {"message": f"Account '{username}' deleted"}
-
-
+    return {
+        "access_token": create_access_token(body.login),
+        "token_type": "bearer"
+    }
 # ---------------------------------------------------------------------------
-# List routes (protected)
+# BOARD HELPERS
 # ---------------------------------------------------------------------------
 
-@app.get("/lists")
-def get_lists(username: str = Depends(get_current_user)):
-    manager = load_task_manager(username)
+def get_board(board_id: str):
+    manager = load_task_manager(board_id)
+    if not manager:
+        raise HTTPException(status_code=404, detail="Board not found")
+    return manager
+
+class BoardCreateRequest(BaseModel):
+    name: str
+
+@app.get("/boards")
+def list_boards(username: str = Depends(get_current_user)):
+    return get_user_boards(username)
+
+@app.post("/boards", status_code=201)
+def create_board(body: BoardCreateRequest, username: str = Depends(get_current_user)):
+    import uuid
+    board_id = str(uuid.uuid4())[:8]
+    manager = TaskManager(board_id=board_id, name=body.name, owner=username, users=[])
+    save_to_firestore("boards", f"board_{board_id}", manager.model_dump(mode="json"))
+    return {"board_id": board_id}
+
+class BoardAddUserRequest(BaseModel):
+    username: str
+
+@app.post("/boards/{board_id}/users")
+async def add_user_to_board(board_id: str, body: BoardAddUserRequest, username: str = Depends(get_current_user)):
+    manager = get_board(board_id)
+    if username != manager.owner:
+        raise HTTPException(status_code=403, detail="Only owner can add users")
+    if body.username not in manager.users:
+        manager.users.append(body.username)
+        manager._save()
+        await manager_ws.broadcast(board_id, {
+        "event": "user_added",
+        "data": {"username": username}
+        })
+    return {"ok": True}
+
+@app.get("/boards/{board_id}/users")
+def get_board_users(board_id: str, username: str = Depends(get_current_user)):
+    manager = get_board(board_id)
+    return {"owner": manager.owner, "users": manager.users}
+
+@app.delete("/boards/{board_id}/users/{target_username}")
+async def remove_user_from_board(board_id: str, target_username: str, username: str = Depends(get_current_user)):
+    manager = get_board(board_id)
+    print(f"requesting user: {username}, owner: {manager.owner}")
+    if username != manager.owner:
+        raise HTTPException(status_code=403, detail="Only owner can remove users")
+    if target_username in manager.users:
+        manager.users.remove(target_username)
+        manager._save()
+    await manager_ws.broadcast(board_id, {
+        "event": "user_removed",
+        "data": {"username": target_username}
+    })
+    return {"ok": True}
+
+# ---------------------------------------------------------------------------
+# LISTS
+# ---------------------------------------------------------------------------
+
+@app.post("/boards/{board_id}/lists", status_code=201)
+async def create_list(
+    board_id: str,
+    body: ListCreateRequest,
+    username: str = Depends(get_current_user)
+):
+    manager = get_board(board_id)
+
+    list_id = manager.add_list(body.name)
+
+    await manager_ws.broadcast(board_id, {
+        "event": "list_created",
+        "data": {"list_id": list_id, "name": body.name}
+    })
+
+    return {"list_id": list_id}
+
+@app.get("/boards/{board_id}/lists")
+def get_lists(board_id: str, username: str = Depends(get_current_user)):
+    manager = get_board(board_id)
     return manager.get_all()
 
+@app.patch("/boards/{board_id}/lists/{list_id}")
+async def rename_list(board_id: str, list_id: int, body: ListRenameRequest):
+    manager = get_board(board_id)
 
-@app.post("/lists", status_code=201)
-def create_list(body: ListCreateRequest, username: str = Depends(get_current_user)):
-    manager = load_task_manager(username)
-    list_id = manager.add_list(body.name)
-    return {"list_id": list_id, "name": body.name}
-
-
-@app.put("/lists/order")
-def reorder_lists(body: ListOrderRequest, username: str = Depends(get_current_user)):
-    manager = load_task_manager(username)
-    if not manager.reorder_lists(body.order):
-        raise HTTPException(status_code=400, detail="Order must contain exactly all existing list IDs")
-    return {"message": "Order saved"}
-
-
-@app.patch("/lists/{list_id}")
-def rename_list(list_id: int, body: ListRenameRequest, username: str = Depends(get_current_user)):
-    manager = load_task_manager(username)
     if not manager.rename_list(list_id, body.name):
-        raise HTTPException(status_code=404, detail="List not found")
-    return {"message": "List renamed"}
+        raise HTTPException(status_code=404)
 
+    await manager_ws.broadcast(board_id, {
+        "event": "list_renamed",
+        "data": {"list_id": list_id, "name": body.name}
+    })
 
-@app.delete("/lists/{list_id}")
-def delete_list(list_id: int, username: str = Depends(get_current_user)):
-    manager = load_task_manager(username)
-    if not manager.remove_list(list_id):
-        raise HTTPException(status_code=404, detail="List not found")
-    return {"message": "List deleted"}
+    return {"ok": True}
 
+@app.delete("/boards/{board_id}/lists/{list_id}")
+async def delete_list(board_id: str, list_id: int):
+    manager = get_board(board_id)
+
+    manager.remove_list(list_id)
+
+    await manager_ws.broadcast(board_id, {
+        "event": "list_deleted",
+        "data": {"list_id": list_id}
+    })
+
+    return {"ok": True}
 
 # ---------------------------------------------------------------------------
-# Task routes (protected)
+# TASKS
 # ---------------------------------------------------------------------------
 
-@app.post("/lists/{list_id}/tasks", status_code=201)
-def create_task(list_id: int, body: TaskCreateRequest, username: str = Depends(get_current_user)):
-    manager = load_task_manager(username)
+@app.post("/boards/{board_id}/lists/{list_id}/tasks", status_code=201)
+async def create_task(board_id: str, list_id: int, body: TaskCreateRequest):
+    manager = get_board(board_id)
+
     task_id = manager.add_task(list_id, body.name, body.description)
-    if task_id is None:
-        raise HTTPException(status_code=404, detail="List not found")
-    return {"task_id": task_id, "name": body.name}
 
+    await manager_ws.broadcast(board_id, {
+        "event": "task_created",
+        "data": {
+            "task_id": task_id,
+            "list_id": list_id,
+            "name": body.name
+        }
+    })
 
-@app.patch("/tasks/{task_id}")
-def update_task(task_id: int, body: TaskUpdateRequest, username: str = Depends(get_current_user)):
-    manager = load_task_manager(username)
-    if task_id not in manager.tasks:
-        raise HTTPException(status_code=404, detail="Task not found")
-    manager.begin_batch()
-    if body.name is not None:
-        manager.change_task_name(task_id, body.name)
-    if body.description is not None:
-        manager.change_task_description(task_id, body.description)
-    if body.color_tag is not None:
-        manager.change_color_tag(task_id, body.color_tag)
-    manager.end_batch()
-    return {"message": "Task updated"}
+    return {"task_id": task_id}
 
+@app.post("/boards/{board_id}/tasks/{task_id}/move")
+async def move_task(board_id: str, task_id: int, body: TaskMoveRequest):
+    manager = get_board(board_id)
 
-@app.delete("/tasks/{task_id}")
-def delete_task(task_id: int, username: str = Depends(get_current_user)):
-    manager = load_task_manager(username)
-    if not manager.remove_task(task_id):
-        raise HTTPException(status_code=404, detail="Task not found")
-    return {"message": "Task deleted"}
+    manager.move_task(task_id, body.target_list_id)
 
+    await manager_ws.broadcast(board_id, {
+        "event": "task_moved",
+        "data": {
+            "task_id": task_id,
+            "target_list_id": body.target_list_id
+        }
+    })
 
-@app.post("/tasks/{task_id}/move")
-def move_task(task_id: int, body: TaskMoveRequest, username: str = Depends(get_current_user)):
-    manager = load_task_manager(username)
-    if not manager.move_task(task_id, body.target_list_id):
-        raise HTTPException(status_code=404, detail="Task or target list not found")
-    return {"message": "Task moved"}
+    return {"ok": True}
+
+@app.patch("/boards/{board_id}/tasks/{task_id}")
+def update_task(board_id: str, task_id: int, body: dict):
+    manager = load_task_manager(board_id)
+
+    if "name" in body:
+        manager.change_task_name(task_id, body["name"])
+
+    if "description" in body:
+        manager.change_task_description(task_id, body["description"])
+
+    if "color_tag" in body:
+        manager.change_color_tag(task_id, body["color_tag"])
+
+    return {"ok": True}
+
+@app.delete("/boards/{board_id}/tasks/{task_id}")
+async def delete_task(board_id: str, task_id: int):
+    manager = get_board(board_id)
+    manager.remove_task(task_id)
+    await manager_ws.broadcast(board_id, {
+        "event": "task_deleted",
+        "data": {"task_id": task_id}
+    })
+    return {"ok": True}
+
+@app.put("/boards/{board_id}/lists/order")
+async def reorder_lists(board_id: str, body: dict):
+    manager = get_board(board_id)
+    if not manager.reorder_lists(body["order"]):
+        raise HTTPException(status_code=400, detail="Invalid order")
+    await manager_ws.broadcast(board_id, {
+        "event": "lists_reordered",
+        "data": {"order": body["order"]}
+    })
+    return {"ok": True}
+
+@app.get("/board_name")
+def load_board():
+    return {"board_name" : get_board("tasks_test")}
+
+#3 accounts
+#Showcase - owner
+#Showcase2, Showcase3 - users
+#Same pw: Showcase

@@ -2,8 +2,9 @@ from contextlib import asynccontextmanager
 from typing import List
 from collections import defaultdict
 import asyncio
+import time
 
-from fastapi import Depends, FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -117,8 +118,23 @@ class UserCredentials(BaseModel):
 # AUTH
 # ---------------------------------------------------------------------------
 
+REGISTER_COOLDOWN_SECONDS = 5
+_last_register_attempt: dict[str, float] = {}
+
 @app.post("/users/register", status_code=201)
-def register(body: UserCredentials):
+def register(body: UserCredentials, request: Request):
+    ip = request.client.host if request.client else "unknown"
+    now = time.monotonic()
+    last = _last_register_attempt.get(ip)
+    if last is not None and now - last < REGISTER_COOLDOWN_SECONDS:
+        retry_after = int(REGISTER_COOLDOWN_SECONDS - (now - last)) + 1
+        raise HTTPException(
+            status_code=429,
+            detail=f"Too many registration attempts. Try again in {retry_after}s.",
+            headers={"Retry-After": str(retry_after)},
+        )
+    _last_register_attempt[ip] = now
+
     if not user_manager.register_user(body.login, body.password):
         raise HTTPException(status_code=400, detail="User exists or invalid data")
     return {"message": "registered"}
@@ -296,6 +312,9 @@ def update_task(board_id: str, task_id: int, body: dict):
 
     if "color_tag" in body:
         manager.change_color_tag(task_id, body["color_tag"])
+
+    if "due_date" in body:
+        manager.change_due_date(task_id, body["due_date"] or None)
 
     return {"ok": True}
 

@@ -22,6 +22,7 @@ class Task(BaseModel):
     name: str
     description: str = ""
     color_tag: ColorTags = ColorTags.NOTHING
+    due_date: Optional[str] = None  # ISO date string "YYYY-MM-DD" or None
 
 
 class TaskList(BaseModel):
@@ -222,6 +223,15 @@ class TaskManager(BaseModel):
             return False
 
         self.tasks[task_id].color_tag = color_tag
+        self._save()
+
+        return True
+
+    def change_due_date(self, task_id: int, due_date: Optional[str]) -> bool:
+        if task_id not in self.tasks:
+            return False
+
+        self.tasks[task_id].due_date = due_date
         self._save()
 
         return True

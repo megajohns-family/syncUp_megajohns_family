@@ -189,6 +189,23 @@ function makeCard(listId, list) {
 }
 
 
+function dueDateHtml(tid, due_date) {
+    if (!due_date) {
+        return `<button class="due-date-btn due-date-empty" onclick="openDatePicker(event,'${tid}')" title="Set due date" data-due="">+ Due date</button>`;
+    }
+    const today = new Date(); today.setHours(0,0,0,0);
+    const due   = new Date(due_date + 'T00:00:00');
+    const diff  = Math.round((due - today) / 86400000);
+    let cls = 'due-date-btn';
+    let label;
+    if (diff < 0)      { cls += ' due-overdue'; label = `Overdue · ${due.toLocaleDateString('en-GB',{day:'numeric',month:'short'})}`; }
+    else if (diff === 0) { cls += ' due-today';   label = 'Due today'; }
+    else if (diff === 1) { cls += ' due-soon';    label = 'Due tomorrow'; }
+    else if (diff <= 7)  { cls += ' due-soon';    label = `Due in ${diff}d`; }
+    else                 { cls += ' due-future';  label = due.toLocaleDateString('en-GB',{day:'numeric',month:'short'}); }
+    return `<button class="${cls}" onclick="openDatePicker(event,'${tid}')" title="Change due date" data-due="${due_date}">${label}</button>`;
+}
+
 function makeTaskHtml(tid, t, listId) {
     const color    = (t.color_tag || 'NOTHING').toUpperCase();
     const colorObj = COLORS.find(c => c.id === color) || COLORS[0];
@@ -221,6 +238,7 @@ function makeTaskHtml(tid, t, listId) {
             <div class="task-name" data-task-id="${tid}" data-field="name"
                  contenteditable="false">${esc(t.name)}</div>
             ${descHtml}
+            <div class="task-due-wrap">${dueDateHtml(tid, t.due_date)}</div>
         </div>
         <div class="task-actions">
             <button class="task-btn"
@@ -251,6 +269,50 @@ async function setColor(taskId, colorId) {
     });
     if (res?.ok) { showToast('Color updated', 'success'); loadLists(); }
     else showToast('Failed to update color', 'error');
+}
+
+function openDatePicker(e, taskId) {
+    e.stopPropagation();
+    document.querySelectorAll('.date-picker-popup').forEach(p => p.remove());
+
+    const btn = e.currentTarget;
+    const popup = document.createElement('div');
+    popup.className = 'date-picker-popup';
+
+    popup.innerHTML = `
+        <input type="date" class="date-picker-input">
+        <div class="date-picker-actions">
+            <button class="date-picker-clear">Clear</button>
+            <button class="date-picker-save">Save</button>
+        </div>`;
+
+    document.body.appendChild(popup);
+
+    const rect = btn.getBoundingClientRect();
+    popup.style.top  = `${rect.bottom + window.scrollY + 4}px`;
+    popup.style.left = `${rect.left  + window.scrollX}px`;
+
+    const input = popup.querySelector('.date-picker-input');
+    input.value = btn.dataset.due || '';
+
+    const save = async (val) => {
+        popup.remove();
+        const res = await apiFetch(`/boards/${boardId}/tasks/${taskId}`, {
+            method: 'PATCH',
+            body: JSON.stringify({ due_date: val || null })
+        });
+        if (res?.ok) loadLists();
+        else showToast('Failed to set due date', 'error');
+    };
+
+    popup.querySelector('.date-picker-save').onclick  = () => save(input.value);
+    popup.querySelector('.date-picker-clear').onclick = () => save('');
+
+    setTimeout(() => {
+        document.addEventListener('click', function handler(ev) {
+            if (!popup.contains(ev.target)) { popup.remove(); document.removeEventListener('click', handler); }
+        });
+    }, 0);
 }
 
 document.addEventListener('dblclick', e => {

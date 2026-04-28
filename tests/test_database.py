@@ -1,111 +1,235 @@
-import time
 import unittest
 from unittest.mock import MagicMock, patch
 
-import app.database as db
+
+class TestVerifyFirebaseConnection(unittest.TestCase):
+    """Tests for verify_firebase_connection()"""
+
+    def test_raises_when_env_vars_missing(self):
+        import app.database as db
+        with patch("os.getenv", return_value=None):
+            with self.assertRaises(RuntimeError) as ctx:
+                db.verify_firebase_connection()
+            self.assertIn("Missing required environment variables", str(ctx.exception))
+
+    def test_raises_on_invalid_json_service_account(self):
+        import app.database as db
+        env = {"FIREBASE_SERVICE_ACCOUNT": "not-json", "SECRET_KEY": "s"}
+        with patch.dict("os.environ", env, clear=True):
+            with self.assertRaises(RuntimeError) as ctx:
+                db.verify_firebase_connection()
+            self.assertIn("not valid JSON", str(ctx.exception))
+
+    def test_raises_when_firebase_init_fails(self):
+        import app.database as db
+        env = {"FIREBASE_SERVICE_ACCOUNT": '{"type":"service_account"}', "SECRET_KEY": "s"}
+        with patch.dict("os.environ", env, clear=True):
+            with patch("firebase_admin._apps", {}):
+                with patch("firebase_admin.credentials.Certificate", side_effect=Exception("bad cred")):
+                    with self.assertRaises(RuntimeError) as ctx:
+                        db.verify_firebase_connection()
+                    self.assertIn("Failed to initialize Firebase Admin SDK", str(ctx.exception))
+
+    def test_raises_when_firestore_client_fails(self):
+        import app.database as db
+        env = {"FIREBASE_SERVICE_ACCOUNT": '{"type":"service_account"}', "SECRET_KEY": "s"}
+        with patch.dict("os.environ", env, clear=True):
+            with patch("firebase_admin._apps", {"default": True}):
+                with patch("firebase_admin.firestore.client", side_effect=Exception("no client")):
+                    with self.assertRaises(RuntimeError) as ctx:
+                        db.verify_firebase_connection()
+                    self.assertIn("Failed to create Firestore client", str(ctx.exception))
+
+    def test_raises_when_health_check_fails(self):
+        import app.database as db
+        env = {"FIREBASE_SERVICE_ACCOUNT": '{"type":"service_account"}', "SECRET_KEY": "s"}
+        mock_client = MagicMock()
+        mock_client.collection.return_value.document.return_value.get.side_effect = Exception("timeout")
+        with patch.dict("os.environ", env, clear=True):
+            with patch("firebase_admin._apps", {"default": True}):
+                with patch("firebase_admin.firestore.client", return_value=mock_client):
+                    with self.assertRaises(RuntimeError) as ctx:
+                        db.verify_firebase_connection()
+                    self.assertIn("Firestore connectivity test failed", str(ctx.exception))
 
 
-def mock_response(status=200, json_data=None):
-    resp = MagicMock()
-    resp.status_code = status
-    resp.json.return_value = json_data or {}
-    resp.raise_for_status.side_effect = None if status < 400 else Exception("HTTP error")
-    return resp
+class TestSaveToFirestore(unittest.TestCase):
+    """Tests for save_to_firestore()"""
+
+    def test_save_calls_set_on_correct_collection_and_doc(self):
+        import app.database as db
+        mock_db = MagicMock()
+        with patch.object(db, "_get_db", return_value=mock_db):
+            db.save_to_firestore("boards", "board_abc", {"name": "MyBoard"})
+            mock_db.collection.assert_called_once_with("boards")
+            mock_db.collection.return_value.document.assert_called_once_with("board_abc")
+            mock_db.collection.return_value.document.return_value.set.assert_called_once_with({"name": "MyBoard"})
+
+    def test_save_passes_data_unchanged(self):
+        import app.database as db
+        mock_db = MagicMock()
+        data = {"lists": {1: {"name": "Todo"}}, "owner": "alice"}
+        with patch.object(db, "_get_db", return_value=mock_db):
+            db.save_to_firestore("boards", "board_xyz", data)
+            mock_db.collection.return_value.document.return_value.set.assert_called_once_with(data)
+
+    def test_save_to_users_collection(self):
+        import app.database as db
+        mock_db = MagicMock()
+        with patch.object(db, "_get_db", return_value=mock_db):
+            db.save_to_firestore("users", "users", {"users": {"alice": "hashed_pw"}})
+            mock_db.collection.assert_called_once_with("users")
+            mock_db.collection.return_value.document.assert_called_once_with("users")
 
 
-class TestDatabase(unittest.TestCase):
+class TestLoadFromFirestoreRaw(unittest.TestCase):
+    """Tests for load_from_firestore_raw()"""
 
-    def setUp(self):
-        db._cache.clear()
+    def test_returns_dict_when_doc_exists(self):
+        import app.database as db
+        mock_doc = MagicMock()
+        mock_doc.exists = True
+        mock_doc.to_dict.return_value = {"name": "TestBoard", "owner": "bob"}
+        mock_db = MagicMock()
+        mock_db.collection.return_value.document.return_value.get.return_value = mock_doc
+        with patch.object(db, "_get_db", return_value=mock_db):
+            result = db.load_from_firestore_raw("boards", "board_123")
+            self.assertEqual(result, {"name": "TestBoard", "owner": "bob"})
 
-    def tearDown(self):
-        db._cache.clear()
+    def test_returns_none_when_doc_missing(self):
+        import app.database as db
+        mock_doc = MagicMock()
+        mock_doc.exists = False
+        mock_db = MagicMock()
+        mock_db.collection.return_value.document.return_value.get.return_value = mock_doc
+        with patch.object(db, "_get_db", return_value=mock_db):
+            result = db.load_from_firestore_raw("boards", "board_missing")
+            self.assertIsNone(result)
 
-    def test_to_from_value_roundtrip(self):
-        data = {
-            "str": "hello",
-            "int": 123,
-            "float": 1.23,
-            "bool": True,
-            "none": None,
-            "list": [1, "a", False],
-            "dict": {"nested": 42},
-        }
+    def test_queries_correct_collection_and_doc(self):
+        import app.database as db
+        mock_doc = MagicMock()
+        mock_doc.exists = True
+        mock_doc.to_dict.return_value = {}
+        mock_db = MagicMock()
+        mock_db.collection.return_value.document.return_value.get.return_value = mock_doc
+        with patch.object(db, "_get_db", return_value=mock_db):
+            db.load_from_firestore_raw("users", "users")
+            mock_db.collection.assert_called_once_with("users")
+            mock_db.collection.return_value.document.assert_called_once_with("users")
 
-        firestore = db._dict_to_fields(data)
-        result = db._fields_to_dict(firestore)
+    def test_returns_empty_dict_when_to_dict_returns_empty(self):
+        import app.database as db
+        mock_doc = MagicMock()
+        mock_doc.exists = True
+        mock_doc.to_dict.return_value = {}
+        mock_db = MagicMock()
+        mock_db.collection.return_value.document.return_value.get.return_value = mock_doc
+        with patch.object(db, "_get_db", return_value=mock_db):
+            result = db.load_from_firestore_raw("boards", "board_empty")
+            self.assertEqual(result, {})
 
-        self.assertEqual(result, data)
 
-    @patch.object(db, "_session")
-    def test_save_to_firestore(self, mock_session):
-        mock_session.patch.return_value = mock_response()
+class TestDeleteFromFirestore(unittest.TestCase):
+    """Tests for delete_from_firestore()"""
 
-        data = {"a": 1}
-        db.save_to_firestore("doc1", data)
+    def test_calls_delete_on_correct_doc(self):
+        import app.database as db
+        mock_db = MagicMock()
+        with patch.object(db, "_get_db", return_value=mock_db):
+            db.delete_from_firestore("boards", "board_abc")
+            mock_db.collection.assert_called_once_with("boards")
+            mock_db.collection.return_value.document.assert_called_once_with("board_abc")
+            mock_db.collection.return_value.document.return_value.delete.assert_called_once()
 
-        self.assertIn("doc1", db._cache)
-        cached_data, _ = db._cache["doc1"]
-        self.assertEqual(cached_data, data)
 
-        mock_session.patch.assert_called_once()
+class TestGetUserBoards(unittest.TestCase):
+    """Tests for get_user_boards()"""
 
-    @patch.object(db, "_session")
-    def test_load_from_firestore_success(self, mock_session):
-        firestore_response = {
-            "fields": {
-                "a": {"integerValue": "1"},
-                "b": {"stringValue": "test"},
-            }
-        }
+    def _make_doc(self, doc_id, data):
+        doc = MagicMock()
+        doc.id = doc_id
+        doc.to_dict.return_value = data
+        return doc
 
-        mock_session.get.return_value = mock_response(json_data=firestore_response)
+    def test_returns_owned_boards(self):
+        import app.database as db
+        owned_doc = self._make_doc("board_abc", {"name": "My Board", "owner": "alice", "users": []})
+        mock_db = MagicMock()
+        mock_db.collection.return_value.where.return_value.stream.side_effect = [
+            iter([owned_doc]),
+            iter([]),
+        ]
+        with patch.object(db, "_get_db", return_value=mock_db):
+            result = db.get_user_boards("alice")
+            self.assertEqual(len(result), 1)
+            self.assertEqual(result[0]["id"], "abc")
+            self.assertEqual(result[0]["name"], "My Board")
+            self.assertEqual(result[0]["owner"], "alice")
 
-        result = db.load_from_firestore_raw("doc1")
+    def test_returns_shared_boards(self):
+        import app.database as db
+        shared_doc = self._make_doc("board_xyz", {"name": "Shared", "owner": "bob", "users": ["alice"]})
+        mock_db = MagicMock()
+        mock_db.collection.return_value.where.return_value.stream.side_effect = [
+            iter([]),
+            iter([shared_doc]),
+        ]
+        with patch.object(db, "_get_db", return_value=mock_db):
+            result = db.get_user_boards("alice")
+            self.assertEqual(len(result), 1)
+            self.assertEqual(result[0]["id"], "xyz")
+            self.assertEqual(result[0]["owner"], "bob")
 
-        self.assertEqual(result, {"a": 1, "b": "test"})
-        self.assertIn("doc1", db._cache)
+    def test_no_duplicate_boards_when_owner_also_in_users(self):
+        import app.database as db
+        doc = self._make_doc("board_abc", {"name": "My Board", "owner": "alice", "users": ["alice"]})
+        mock_db = MagicMock()
+        mock_db.collection.return_value.where.return_value.stream.side_effect = [
+            iter([doc]),
+            iter([doc]),
+        ]
+        with patch.object(db, "_get_db", return_value=mock_db):
+            result = db.get_user_boards("alice")
+            self.assertEqual(len(result), 1)
 
-    @patch.object(db, "_session")
-    def test_load_from_firestore_404(self, mock_session):
-        mock_session.get.return_value = mock_response(status=404)
+    def test_returns_empty_list_when_no_boards(self):
+        import app.database as db
+        mock_db = MagicMock()
+        mock_db.collection.return_value.where.return_value.stream.side_effect = [
+            iter([]),
+            iter([]),
+        ]
+        with patch.object(db, "_get_db", return_value=mock_db):
+            result = db.get_user_boards("alice")
+            self.assertEqual(result, [])
 
-        result = db.load_from_firestore_raw("missing")
+    def test_strips_board_prefix_from_doc_id(self):
+        import app.database as db
+        doc = self._make_doc("board_myid123", {"name": "X", "owner": "carol", "users": []})
+        mock_db = MagicMock()
+        mock_db.collection.return_value.where.return_value.stream.side_effect = [
+            iter([doc]),
+            iter([]),
+        ]
+        with patch.object(db, "_get_db", return_value=mock_db):
+            result = db.get_user_boards("carol")
+            self.assertEqual(result[0]["id"], "myid123")
 
-        self.assertIsNone(result)
-        self.assertIn("missing", db._cache)
-        self.assertIsNone(db._cache["missing"][0])
 
-    @patch.object(db, "_session")
-    def test_cache_hit(self, mock_session):
-        db._cache["doc1"] = ({"cached": True}, time.monotonic())
+class TestGetDbGuard(unittest.TestCase):
+    """Tests that _get_db() raises before initialization."""
 
-        result = db.load_from_firestore_raw("doc1")
-
-        self.assertEqual(result, {"cached": True})
-        mock_session.get.assert_not_called()
-
-    @patch.object(db, "_session")
-    def test_cache_expired(self, mock_session):
-        db._cache["doc1"] = ({"old": True}, time.monotonic() - 10)
-
-        firestore_response = {
-            "fields": {"new": {"booleanValue": True}}
-        }
-
-        mock_session.get.return_value = mock_response(json_data=firestore_response)
-
-        result = db.load_from_firestore_raw("doc1")
-
-        self.assertEqual(result, {"new": True})
-        mock_session.get.assert_called_once()
-
-    def test_invalidate_cache(self):
-        db._cache["doc1"] = ({"a": 1}, time.monotonic())
-
-        db.invalidate_cache("doc1")
-
-        self.assertNotIn("doc1", db._cache)
+    def test_raises_runtime_error_before_init(self):
+        import app.database as db
+        original = db._db
+        db._db = None
+        try:
+            with self.assertRaises(RuntimeError) as ctx:
+                db._get_db()
+            self.assertIn("not initialized", str(ctx.exception))
+        finally:
+            db._db = original
 
 
 if __name__ == "__main__":

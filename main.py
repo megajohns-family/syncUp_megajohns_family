@@ -79,6 +79,18 @@ class ConnectionManager:
 
 manager_ws = ConnectionManager()
 
+# @app.websocket("/ws/{board_id}")
+# async def websocket_endpoint(websocket: WebSocket, board_id: str, token: str):
+#     username = decode_token(token)
+#     if not username:
+#         await websocket.close()
+#         return
+#     await manager_ws.connect(websocket, board_id, username)
+#     try:
+#         while True:
+#             await websocket.receive_text()
+#     except WebSocketDisconnect:
+#         manager_ws.disconnect(websocket, board_id)
 @app.websocket("/ws/{board_id}")
 async def websocket_endpoint(websocket: WebSocket, board_id: str, token: str):
     username = decode_token(token)
@@ -88,7 +100,7 @@ async def websocket_endpoint(websocket: WebSocket, board_id: str, token: str):
     await manager_ws.connect(websocket, board_id, username)
     try:
         while True:
-            await websocket.receive_text()
+            data = await websocket.receive_text()
     except WebSocketDisconnect:
         manager_ws.disconnect(websocket, board_id)
 

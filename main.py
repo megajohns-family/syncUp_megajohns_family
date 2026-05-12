@@ -80,6 +80,18 @@ class ConnectionManager:
 
 manager_ws = ConnectionManager()
 
+# @app.websocket("/ws/{board_id}")
+# async def websocket_endpoint(websocket: WebSocket, board_id: str, token: str):
+#     username = decode_token(token)
+#     if not username:
+#         await websocket.close()
+#         return
+#     await manager_ws.connect(websocket, board_id, username)
+#     try:
+#         while True:
+#             await websocket.receive_text()
+#     except WebSocketDisconnect:
+#         manager_ws.disconnect(websocket, board_id)
 @app.websocket("/ws/{board_id}")
 async def websocket_endpoint(websocket: WebSocket, board_id: str, token: str):
     username = decode_token(token)
@@ -89,7 +101,7 @@ async def websocket_endpoint(websocket: WebSocket, board_id: str, token: str):
     await manager_ws.connect(websocket, board_id, username)
     try:
         while True:
-            await websocket.receive_text()
+            data = await websocket.receive_text()
     except WebSocketDisconnect:
         manager_ws.disconnect(websocket, board_id)
 
@@ -342,6 +354,24 @@ async def reorder_lists(board_id: str, body: dict):
 @app.get("/board_name")
 def load_board():
     return {"board_name" : get_board("tasks_test")}
+
+@app.get("/boards/{board_id}/search")
+def search_tasks(board_id: str, q: str, username: str = Depends(get_current_user)):
+    manager = get_board(board_id)
+    q = q.lower()
+    results = []
+    for task_id, task in manager.tasks.items():
+        if q in task.name.lower() or q in task.description.lower():
+            list_id = manager._find_list_of_task(task_id)
+            results.append({
+                "task_id": task_id,
+                "name": task.name,
+                "description": task.description,
+                "color_tag": task.color_tag,
+                "list_id": list_id,
+                "list_name": manager.lists[list_id].name if list_id else ""
+            })
+    return results
 
 #3 accounts
 #Showcase - owner

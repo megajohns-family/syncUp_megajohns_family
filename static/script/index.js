@@ -549,6 +549,7 @@ async function confirmDeleteTask(taskId, taskName) {
 
 const ws = new WebSocket(`wss://${location.host}/ws/${boardId}?token=${getToken()}`);
 
+
 ws.onmessage = (e) => {
     const { event } = JSON.parse(e.data);
     loadLists();
@@ -640,4 +641,48 @@ async function removeUser(username) {
     const res = await apiFetch(`/boards/${boardId}/users/${username}`, { method: 'DELETE' });
     if (res.ok) { showToast('User removed', 'info'); showUsersModal(); }
     else showToast('Failed to remove user', 'error');
+}
+
+let searchTimeout = null;
+
+function searchTasks(query) {
+    clearTimeout(searchTimeout);
+    const container = document.getElementById('search-results');
+    if (!query.trim()) { container.innerHTML = ''; return; }
+
+    searchTimeout = setTimeout(async () => {
+        const res = await apiFetch(`/boards/${boardId}/search?q=${encodeURIComponent(query)}`);
+        if (!res.ok) return;
+        const results = await res.json();
+
+        if (!results.length) {
+            container.innerHTML = `<div style="padding:12px;color:var(--muted);">No results found.</div>`;
+            return;
+        }
+
+        container.innerHTML = `
+            <div style="background:var(--surface);border-radius:12px;padding:12px;margin-top:8px;max-width:600px;">
+                ${results.map(r => `
+                    <div style="padding:10px 0;border-bottom:1px solid var(--muted);cursor:pointer;"
+                         onclick="scrollToTask(${r.task_id})">
+                        <div style="font-weight:500;">${esc(r.name)}</div>
+                        <div style="font-size:12px;color:var(--muted);">${esc(r.list_name)}${r.description ? ' · ' + esc(r.description.slice(0, 60)) : ''}</div>
+                    </div>`).join('')}
+            </div>`;
+    }, 300);
+}
+
+function scrollToTask(taskId) {
+    document.getElementById('search-input').value = '';
+    document.getElementById('search-results').innerHTML = '';
+    const el = document.querySelector(`.task-item[data-task-id="${taskId}"]`);
+    if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.style.transition = 'background 0.3s';
+        el.style.background = 'rgba(26,18,8,0.05)';
+        setTimeout(() => {
+            el.style.background = '';
+        }, 1000);
+    }
+
 }

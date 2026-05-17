@@ -3,6 +3,7 @@ const boardId = localStorage.getItem('boardId') || 'tasks_test';
 const getToken  = () => localStorage.getItem('token');
 const getUser   = () => localStorage.getItem('username');
 const clearAuth = () => localStorage.clear();
+let searchTimeout = null;
 
 window.onload = () => {
     if (!getToken()) return window.location.href = '/static/html/login.html';
@@ -642,8 +643,6 @@ async function removeUser(username) {
     if (res.ok) { showToast('User removed', 'info'); showUsersModal(); }
     else showToast('Failed to remove user', 'error');
 }
-
-let searchTimeout = null;
 
 function searchTasks(query) {
     clearTimeout(searchTimeout);

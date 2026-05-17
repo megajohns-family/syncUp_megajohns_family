@@ -10,3 +10,4 @@ env/
 serviceAccountKey.json
 .env
 .DS_Store
+serv_logs/

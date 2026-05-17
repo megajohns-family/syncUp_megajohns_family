@@ -3,6 +3,7 @@ const boardId = localStorage.getItem('boardId') || 'tasks_test';
 const getToken  = () => localStorage.getItem('token');
 const getUser   = () => localStorage.getItem('username');
 const clearAuth = () => localStorage.clear();
+let searchTimeout = null;
 
 window.onload = () => {
     if (!getToken()) return window.location.href = '/static/html/login.html';
@@ -485,7 +486,7 @@ async function confirmDeleteTask(taskId, taskName) {
     else showToast('Failed to delete task', 'error');
 }
 
-const ws = new WebSocket(`ws://${location.host}/ws/${boardId}?token=${getToken()}`);
+const ws = new WebSocket(`wss://${location.host}/ws/${boardId}?token=${getToken()}`);
 
 
 ws.onmessage = (e) => {
@@ -580,8 +581,6 @@ async function removeUser(username) {
     if (res.ok) { showToast('User removed', 'info'); showUsersModal(); }
     else showToast('Failed to remove user', 'error');
 }
-
-let searchTimeout = null;
 
 function searchTasks(query) {
     clearTimeout(searchTimeout);

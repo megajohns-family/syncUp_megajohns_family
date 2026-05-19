@@ -15,19 +15,27 @@ from tests.conftest import *  # noqa: F401,F403
 # ---------------------------------------------------------------------------
 
 def _bootstrap_app():
-    """Import `main` with Firebase fully mocked out."""
+    """Import `main` with Firebase fully mocked out.
+
+    The FastAPI lifespan calls ``verify_firebase_connection`` on every
+    ``TestClient.__enter__``. We replace it (and ``save_to_firestore`` /
+    ``get_user_boards``) with no-ops *on the imported main module* so they
+    stay stubbed for the whole test session, regardless of environment.
+    """
+    import os
+    os.environ.setdefault("FIREBASE_SERVICE_ACCOUNT", '{"type":"service_account"}')
+    os.environ.setdefault("SECRET_KEY", "testsecret")
+
     mock_db = MagicMock()
-    # health-check doc.get() must not raise
     mock_db.collection.return_value.document.return_value.get.return_value = MagicMock()
 
     with patch("firebase_admin._apps", {"default": True}), \
-         patch("firebase_admin.firestore.client", return_value=mock_db), \
-         patch.dict("os.environ", {
-             "FIREBASE_SERVICE_ACCOUNT": '{"type":"service_account"}',
-             "SECRET_KEY": "testsecret",
-         }):
+         patch("firebase_admin.firestore.client", return_value=mock_db):
         import main  # noqa: WPS433  (intentional in-function import)
-        return main
+
+    # Permanently neutralise Firestore-touching helpers on the main module
+    main.verify_firebase_connection = lambda: None
+    return main
 
 
 main_mod = _bootstrap_app()

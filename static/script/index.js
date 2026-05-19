@@ -5,9 +5,33 @@ const getUser   = () => localStorage.getItem('username');
 const clearAuth = () => localStorage.clear();
 let searchTimeout = null;
 
+const PAGE_SIZES = [10, 50, 100];
+let pageSize = parseInt(localStorage.getItem('pageSize')) || 10;
+if (!PAGE_SIZES.includes(pageSize)) pageSize = 10;
+const listPages = {}; // { [listId]: currentPage }
+
+function getListPage(listId) {
+    return listPages[listId] || 1;
+}
+
+function setListPage(listId, page) {
+    listPages[listId] = Math.max(1, page);
+}
+
+function changePageSize(size) {
+    const next = parseInt(size);
+    if (!PAGE_SIZES.includes(next)) return;
+    pageSize = next;
+    localStorage.setItem('pageSize', String(pageSize));
+    for (const k of Object.keys(listPages)) delete listPages[k];
+    loadLists();
+}
+
 window.onload = () => {
     if (!getToken()) return window.location.href = '/static/html/login.html';
     document.getElementById('username-label').textContent = getUser() || 'User';
+    const sel = document.getElementById('page-size-select');
+    if (sel) sel.value = String(pageSize);
     loadLists();
 };
 
@@ -116,11 +140,58 @@ const COLORS = [
 async function loadLists() {
     document.getElementById('loading').style.display = '';
     document.getElementById('lists-grid').innerHTML = '';
-    const res = await apiFetch(`/boards/${boardId}/lists`);
+    const res = await apiFetch(`/boards/${boardId}/lists?page=1&limit=${pageSize}`);
     document.getElementById('loading').style.display = 'none';
     if (!res) return;
     const data = await res.json();
+
+    // For each list, re-fetch the page the user is currently on (if not page 1)
+    await Promise.all(Object.keys(data).map(async (listId) => {
+        const page = getListPage(listId);
+        if (page === 1) return;
+        const r = await apiFetch(`/boards/${boardId}/lists/${listId}/tasks?page=${page}&limit=${pageSize}`);
+        if (!r || !r.ok) { setListPage(listId, 1); return; }
+        const paged = await r.json();
+        data[listId].tasks = paged.tasks;
+        data[listId].page = paged.page;
+        data[listId].limit = paged.limit;
+        data[listId].total = paged.total;
+        data[listId].total_pages = paged.total_pages;
+        setListPage(listId, paged.page);
+    }));
+
     renderLists(data);
+}
+
+async function changeListPage(listId, delta) {
+    const card = document.querySelector(`.list-card[data-list-id="${listId}"]`);
+    const totalPages = card ? parseInt(card.dataset.totalPages || '1') : 1;
+    const current = getListPage(listId);
+    const next = Math.min(Math.max(1, current + delta), totalPages);
+    if (next === current) return;
+    setListPage(listId, next);
+    await reloadList(listId);
+}
+
+async function reloadList(listId) {
+    const page = getListPage(listId);
+    const res = await apiFetch(`/boards/${boardId}/lists/${listId}/tasks?page=${page}&limit=${pageSize}`);
+    if (!res || !res.ok) return;
+    const paged = await res.json();
+    setListPage(listId, paged.page);
+
+    const card = document.querySelector(`.list-card[data-list-id="${listId}"]`);
+    if (!card) { loadLists(); return; }
+    const name = card.querySelector('.list-name')?.textContent || '';
+    const newCard = makeCard(listId, {
+        name,
+        tasks: paged.tasks,
+        page: paged.page,
+        limit: paged.limit,
+        total: paged.total,
+        total_pages: paged.total_pages,
+    });
+    card.replaceWith(newCard);
 }
 
 function esc(s) {
@@ -160,16 +231,34 @@ function makeCard(listId, list) {
     const tasks     = list.tasks ? Object.entries(list.tasks) : [];
     const taskCount = tasks.length;
 
+    const total       = typeof list.total === 'number' ? list.total : taskCount;
+    const currentPage = list.page  || getListPage(listId);
+    const totalPages  = list.total_pages || 1;
+    card.dataset.totalPages = String(totalPages);
+    setListPage(listId, currentPage);
+
     const tasksHtml = taskCount
         ? tasks.map(([tid, t]) => makeTaskHtml(tid, t, listId)).join('')
         : `<div class="empty-state">No tasks yet — drop one here or add below</div>`;
+
+    const showPager = total > pageSize || currentPage > 1;
+    const prevDisabled = currentPage <= 1 ? 'disabled' : '';
+    const nextDisabled = currentPage >= totalPages ? 'disabled' : '';
+    const pagerHtml = showPager ? `
+        <div class="task-pager" style="display:flex;align-items:center;justify-content:space-between;padding:6px 4px;font-size:12px;color:var(--muted);">
+            <button class="pager-btn" ${prevDisabled} onclick="changeListPage('${listId}', -1)"
+                style="background:transparent;border:1px solid var(--muted);border-radius:6px;padding:4px 10px;cursor:pointer;${prevDisabled ? 'opacity:0.4;cursor:not-allowed;' : ''}">← Prev</button>
+            <span>Page ${currentPage} / ${totalPages} · ${total} task${total === 1 ? '' : 's'}</span>
+            <button class="pager-btn" ${nextDisabled} onclick="changeListPage('${listId}', 1)"
+                style="background:transparent;border:1px solid var(--muted);border-radius:6px;padding:4px 10px;cursor:pointer;${nextDisabled ? 'opacity:0.4;cursor:not-allowed;' : ''}">Next →</button>
+        </div>` : '';
 
     card.innerHTML = `
         <div class="list-header">
             <div class="list-header-left">
                 <span class="drag-handle" title="Drag to reorder">⠿</span>
                 <span class="list-name">${esc(list.name)}</span>
-                ${taskCount ? `<span class="task-count">${taskCount}</span>` : ''}
+                ${total ? `<span class="task-count">${total}</span>` : ''}
             </div>
             <button class="delete-list-btn"
                     onclick="confirmDeleteList('${listId}','${esc(list.name)}')"
@@ -178,6 +267,7 @@ function makeCard(listId, list) {
         <div class="task-list" data-list-id="${listId}">
             ${tasksHtml}
         </div>
+        ${pagerHtml}
         <div class="new-task-form">
             <input type="text" id="task-input-${listId}"
                    placeholder="New task…"

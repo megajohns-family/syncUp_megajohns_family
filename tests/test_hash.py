@@ -1,23 +1,25 @@
+"""Tests for app.hash (argon2 password hashing helpers)."""
 import unittest
+
+from tests.conftest import *  # noqa: F401,F403  (ensure sys.path is set)
+
 from app.hash import hash_password, verify_password
+
 
 class TestHashPassword(unittest.TestCase):
     def test_returns_string(self):
-        result = hash_password("secret")
-        self.assertIsInstance(result, str)
+        self.assertIsInstance(hash_password("secret"), str)
 
     def test_not_plaintext(self):
-        result = hash_password("secret")
-        self.assertNotEqual(result, "secret")
+        self.assertNotEqual(hash_password("secret"), "secret")
 
-    def test_different_hashes_each_call(self):
-        # argon2 uses a random salt, so two hashes of the same password differ
-        h1 = hash_password("secret")
-        h2 = hash_password("secret")
-        self.assertNotEqual(h1, h2)
+    def test_different_salt_each_call(self):
+        # argon2 uses a random salt — two hashes of the same password must differ
+        self.assertNotEqual(hash_password("secret"), hash_password("secret"))
 
     def test_hash_nonempty(self):
-        self.assertTrue(len(hash_password("x")) > 0)
+        self.assertGreater(len(hash_password("x")), 0)
+
 
 class TestVerifyPassword(unittest.TestCase):
     def setUp(self):
@@ -42,6 +44,7 @@ class TestVerifyPassword(unittest.TestCase):
     def test_different_passwords_same_hash_fails(self):
         other = hash_password("other")
         self.assertFalse(verify_password(self.password, other))
+
 
 if __name__ == "__main__":
     unittest.main()

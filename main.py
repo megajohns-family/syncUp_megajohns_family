@@ -244,10 +244,43 @@ async def create_list(
 
     return {"list_id": list_id}
 
+ALLOWED_PAGE_SIZES = {10, 50, 100}
+
+
+def _normalize_page_limit(page: int, limit: int) -> tuple[int, int]:
+    if page < 1:
+        page = 1
+    if limit not in ALLOWED_PAGE_SIZES:
+        limit = 10
+    return page, limit
+
+
 @app.get("/boards/{board_id}/lists")
-def get_lists(board_id: str, username: str = Depends(get_current_user)):
+def get_lists(
+    board_id: str,
+    page: int = 1,
+    limit: int = 10,
+    username: str = Depends(get_current_user),
+):
     manager = get_board(board_id)
-    return manager.get_all()
+    page, limit = _normalize_page_limit(page, limit)
+    return manager.get_all(page=page, limit=limit)
+
+
+@app.get("/boards/{board_id}/lists/{list_id}/tasks")
+def get_list_tasks_paginated(
+    board_id: str,
+    list_id: int,
+    page: int = 1,
+    limit: int = 10,
+    username: str = Depends(get_current_user),
+):
+    manager = get_board(board_id)
+    page, limit = _normalize_page_limit(page, limit)
+    result = manager.get_list_tasks(list_id, page=page, limit=limit)
+    if result is None:
+        raise HTTPException(status_code=404, detail="List not found")
+    return result
 
 @app.patch("/boards/{board_id}/lists/{list_id}")
 async def rename_list(board_id: str, list_id: int, body: ListRenameRequest):

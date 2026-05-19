@@ -91,9 +91,18 @@
                     onkeydown="if(event.key==='Enter') createList()">
                 <button onclick="createList()">Create</button>
             </div>
-            <div style="margin-top:12px;">
+            <div style="margin-top:12px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
                 <input type="text" id="search-input" placeholder="Search tasks…" oninput="searchTasks(this.value)"
                     style="width:300px;padding:10px 14px;border-radius:10px;border:1px solid var(--muted);font-family:var(--font-body);font-size:14px;background:var(--surface);color:var(--ink);">
+                <label style="font-size:14px;color:var(--muted);display:flex;align-items:center;gap:6px;">
+                    Tasks per page:
+                    <select id="page-size-select" onchange="changePageSize(this.value)"
+                        style="padding:8px 10px;border-radius:8px;border:1px solid var(--muted);background:var(--surface);color:var(--ink);font-family:var(--font-body);font-size:14px;">
+                        <option value="10">10</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                    </select>
+                </label>
             </div>
             <div id="search-results"></div>
         </div>

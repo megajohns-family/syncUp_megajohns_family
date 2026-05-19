@@ -245,25 +245,66 @@ class TaskManager(BaseModel):
 
     # ---------------- READ ----------------
 
-    def get_list_tasks(self, list_id: int) -> Optional[dict[int, Task]]:
+    def get_list_tasks(
+        self,
+        list_id: int,
+        page: Optional[int] = None,
+        limit: Optional[int] = None,
+    ):
         if list_id not in self.lists:
             return None
 
+        all_ids = [tid for tid in self.lists[list_id].task_ids if tid in self.tasks]
+
+        if page is None and limit is None:
+            return {tid: self.tasks[tid] for tid in all_ids}
+
+        page = max(1, int(page or 1))
+        limit = max(1, int(limit or 10))
+
+        total = len(all_ids)
+        total_pages = max(1, (total + limit - 1) // limit) if total else 1
+        page = min(page, total_pages)
+
+        start = (page - 1) * limit
+        end = start + limit
+        page_ids = all_ids[start:end]
+
         return {
-            tid: self.tasks[tid]
-            for tid in self.lists[list_id].task_ids
-            if tid in self.tasks
+            "tasks": {tid: self.tasks[tid] for tid in page_ids},
+            "total": total,
+            "page": page,
+            "limit": limit,
+            "total_pages": total_pages,
         }
 
-    def get_all(self) -> dict:
-        return {
-            list_id: {
-                "name": self.lists[list_id].name,
-                "tasks": self.get_list_tasks(list_id),
-            }
-            for list_id in self.list_order
-            if list_id in self.lists
-        }
+    def get_all(
+        self,
+        page: Optional[int] = None,
+        limit: Optional[int] = None,
+    ) -> dict:
+        paginated = page is not None or limit is not None
+
+        result: dict = {}
+        for list_id in self.list_order:
+            if list_id not in self.lists:
+                continue
+            if paginated:
+                paged = self.get_list_tasks(list_id, page=page, limit=limit)
+                result[list_id] = {
+                    "name": self.lists[list_id].name,
+                    "tasks": paged["tasks"],
+                    "page": paged["page"],
+                    "limit": paged["limit"],
+                    "total": paged["total"],
+                    "total_pages": paged["total_pages"],
+                }
+            else:
+                result[list_id] = {
+                    "name": self.lists[list_id].name,
+                    "tasks": self.get_list_tasks(list_id),
+                }
+        return result
     def get_board_name(self):
         return self.board_id
 

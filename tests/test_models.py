@@ -163,6 +163,14 @@ class TestTaskManagerTasks(unittest.TestCase):
         tid = self.tm.add_task(self.lid, "A")
         self.assertIn(tid, self.tm.lists[self.lid].task_ids)
 
+    def test_add_task_with_due_date(self):
+        tid = self.tm.add_task(self.lid, "A", "desc", "2027-01-15")
+        self.assertEqual(self.tm.tasks[tid].due_date, "2027-01-15")
+
+    def test_add_task_without_due_date_defaults_to_none(self):
+        tid = self.tm.add_task(self.lid, "A")
+        self.assertIsNone(self.tm.tasks[tid].due_date)
+
     def test_remove_task_success(self):
         tid = self.tm.add_task(self.lid, "A")
         self.assertTrue(self.tm.remove_task(tid))

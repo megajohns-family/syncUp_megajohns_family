@@ -342,6 +342,42 @@ class TestTasks(_AppTestCase):
             self.assertEqual(response.status_code, 201)
             self.assertIn("task_id", response.json())
 
+    def test_create_task_with_due_date_persists_it(self):
+        board, list_id = self._board_with_list()
+        with patch("main.load_task_manager", return_value=board), \
+             patch("main.save_to_firestore"):
+            response = self.client.post(
+                f"/boards/abc/lists/{list_id}/tasks",
+                json={"name": "Birthday", "description": "", "due_date": "2027-06-01"},
+            )
+            self.assertEqual(response.status_code, 201)
+            task_id = response.json()["task_id"]
+            self.assertEqual(board.tasks[task_id].due_date, "2027-06-01")
+
+    def test_create_task_without_due_date_stores_none(self):
+        board, list_id = self._board_with_list()
+        with patch("main.load_task_manager", return_value=board), \
+             patch("main.save_to_firestore"):
+            response = self.client.post(
+                f"/boards/abc/lists/{list_id}/tasks",
+                json={"name": "Plain task"},
+            )
+            self.assertEqual(response.status_code, 201)
+            task_id = response.json()["task_id"]
+            self.assertIsNone(board.tasks[task_id].due_date)
+
+    def test_create_task_empty_due_date_string_stores_none(self):
+        board, list_id = self._board_with_list()
+        with patch("main.load_task_manager", return_value=board), \
+             patch("main.save_to_firestore"):
+            response = self.client.post(
+                f"/boards/abc/lists/{list_id}/tasks",
+                json={"name": "Plain task", "due_date": ""},
+            )
+            self.assertEqual(response.status_code, 201)
+            task_id = response.json()["task_id"]
+            self.assertIsNone(board.tasks[task_id].due_date)
+
     def test_move_task_succeeds(self):
         board, list_id = self._board_with_list()
         with patch("main.save_to_firestore"):

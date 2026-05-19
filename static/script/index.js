@@ -182,6 +182,9 @@ function makeCard(listId, list) {
             <input type="text" id="task-input-${listId}"
                    placeholder="New task…"
                    onkeydown="if(event.key==='Enter') createTask('${listId}')">
+            <input type="date" id="task-due-${listId}"
+                   class="new-task-due"
+                   title="Optional due date">
             <button onclick="createTask('${listId}')">+</button>
         </div>`;
 
@@ -524,12 +527,15 @@ async function confirmDeleteList(listId, listName) {
 
 async function createTask(listId) {
     const input = document.getElementById(`task-input-${listId}`);
+    const dueEl = document.getElementById(`task-due-${listId}`);
     const name  = input.value.trim();
     if (!name) return;
+    const due_date = dueEl && dueEl.value ? dueEl.value : null;
     input.value = '';
+    if (dueEl) dueEl.value = '';
     const res = await apiFetch(`/boards/${boardId}/lists/${listId}/tasks`, {
     method: 'POST',
-    body: JSON.stringify({ name, description: '' })
+    body: JSON.stringify({ name, description: '', due_date })
     });
     if (res?.ok)  { showToast('Task added ✓', 'success'); loadLists(); }
     else showToast('Failed to add task', 'error');

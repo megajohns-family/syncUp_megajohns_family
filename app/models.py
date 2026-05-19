@@ -145,7 +145,13 @@ class TaskManager(BaseModel):
 
     # ---------------- TASKS ----------------
 
-    def add_task(self, list_id: int, name: str, description: str = "") -> Optional[int]:
+    def add_task(
+        self,
+        list_id: int,
+        name: str,
+        description: str = "",
+        due_date: Optional[str] = None,
+    ) -> Optional[int]:
         if list_id not in self.lists:
             return None
 
@@ -153,7 +159,8 @@ class TaskManager(BaseModel):
 
         self.tasks[task_id] = Task(
             name=name,
-            description=description
+            description=description,
+            due_date=due_date,
         )
 
         self.lists[list_id].task_ids.append(task_id)

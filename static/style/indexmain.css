@@ -803,6 +803,23 @@ main {
     border-color: var(--amber);
     box-shadow: 0 0 0 3px rgba(200,133,42,0.1);
 }
+.new-task-form .new-task-due {
+    flex: 0 0 auto;
+    width: 140px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    border: 1.5px solid var(--border);
+    background: rgba(253,246,235,0.8);
+    font-size: 13px;
+    color: var(--ink);
+    font-family: var(--font-body);
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+.new-task-form .new-task-due:focus {
+    border-color: var(--amber);
+    box-shadow: 0 0 0 3px rgba(200,133,42,0.1);
+}
 .new-task-form button {
     width: 40px; height: 40px;
     background: var(--amber);

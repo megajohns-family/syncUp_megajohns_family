@@ -118,6 +118,7 @@ class ListRenameRequest(BaseModel):
 class TaskCreateRequest(BaseModel):
     name: str
     description: str = ""
+    due_date: str | None = None
 
 class TaskMoveRequest(BaseModel):
     target_list_id: int
@@ -283,14 +284,15 @@ async def delete_list(board_id: str, list_id: int):
 async def create_task(board_id: str, list_id: int, body: TaskCreateRequest):
     manager = get_board(board_id)
 
-    task_id = manager.add_task(list_id, body.name, body.description)
+    task_id = manager.add_task(list_id, body.name, body.description, body.due_date or None)
 
     await manager_ws.broadcast(board_id, {
         "event": "task_created",
         "data": {
             "task_id": task_id,
             "list_id": list_id,
-            "name": body.name
+            "name": body.name,
+            "due_date": body.due_date or None,
         }
     })
 

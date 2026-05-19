@@ -5,28 +5,33 @@
 - Tymon Budzowski
 - Bartosz Sieradzki
 - Oleksandr Shybitskyi
+
 ## Overview
 
-SyncUp is a task management web app built with FastAPI and Firestore. Users can register, log in, and manage personal task lists with color-tagged tasks. The app features a clean, modern UI with responsive design and smooth interactions.<br>
- **Now online!** [SyncUp](https://syncup-2tip.onrender.com)
+SyncUp is a real-time collaborative task management web app built with FastAPI and Firestore. Multiple users can work on shared boards simultaneously — changes appear instantly for all connected users via WebSocket. Users can register, log in, create boards, invite teammates, and manage task lists with color-tagged tasks. The app features a clean, modern UI with responsive design and smooth interactions.
+
+**Now online!** [SyncUp](https://syncup.up.railway.app)
 
 ## Tech Stack
 
 | Layer | Technology |
 |-------|------------|
 | **Backend** | FastAPI, Uvicorn |
-| **Database** | Google Firestore (REST API) with in-memory cache |
+| **Database** | Google Firestore |
 | **Auth** | JWT (PyJWT, 24h expiry), Argon2 password hashing (passlib) |
+| **Realtime** | WebSocket (FastAPI native) |
 | **Frontend** | Vanilla HTML / CSS / JavaScript |
 | **Validation** | Pydantic v2 |
+| **Hosting** | Railway |
 
 ## Project Structure
 ```
 .
 ├── main.py                    # FastAPI app entry point & routes
+├── Procfile                   # Railway deployment config
 ├── app/
 │   ├── auth.py                # JWT token creation and validation
-│   ├── database.py            # Firestore REST API client
+│   ├── database.py            # Firestore client
 │   ├── hash.py                # Argon2 password hashing utilities
 │   └── models.py              # UserManager, TaskManager
 ├── static/
@@ -34,6 +39,7 @@ SyncUp is a task management web app built with FastAPI and Firestore. Users can 
 │   │   ├── landingpage.html   # Public landing page
 │   │   ├── login.html         # Login form
 │   │   ├── register.html      # Registration form
+│   │   ├── boards.html        # Board selection page (protected)
 │   │   └── index.html         # Main dashboard (protected)
 │   ├── style/
 │   │   ├── main.css           # Landing page styles
@@ -42,11 +48,13 @@ SyncUp is a task management web app built with FastAPI and Firestore. Users can 
 │   ├── script/
 │   │   ├── login.js           # Login logic
 │   │   ├── register.js        # Registration logic
+│   │   ├── boards.js          # Board selection logic
 │   │   └── index.js           # Dashboard logic
 │   └── imgs/
-│       └── logo.png           # Website's logo
+│       └── logo.png           # Website logo
 └── requirements.txt
 ```
+
 ## Setup
 
 1. **Install dependencies:**
@@ -57,7 +65,7 @@ SyncUp is a task management web app built with FastAPI and Firestore. Users can 
 2. **Configure environment** — create a `.env` file:
    ```
    SECRET_KEY=your_jwt_secret
-   GOOGLE_APPLICATION_CREDENTIALS=path/to/serviceAccount.json
+   FIREBASE_SERVICE_ACCOUNT={"type":"service_account",...}
    ```
 
 3. **Run the server:**
@@ -74,35 +82,53 @@ SyncUp is a task management web app built with FastAPI and Firestore. Users can 
 |--------|------|-------------|
 | POST | `/users/register` | Register a new user |
 | POST | `/users/login` | Log in, returns JWT token |
-| POST | `/users/change-password` | Change password (auth required) |
-| DELETE | `/users/me` | Delete account (auth required) |
+
+### Boards (auth required)
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/boards` | List all boards for current user |
+| POST | `/boards` | Create a new board |
+| GET | `/boards/{board_id}/users` | List users on a board |
+| POST | `/boards/{board_id}/users` | Add user to a board (owner only) |
+| DELETE | `/boards/{board_id}/users/{username}` | Remove user from a board (owner only) |
 
 ### Lists (auth required)
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/lists` | Get all lists with tasks |
-| POST | `/lists` | Create a list |
-| PATCH | `/lists/{list_id}` | Rename a list |
-| DELETE | `/lists/{list_id}` | Delete a list and its tasks |
+| GET | `/boards/{board_id}/lists` | Get all lists with tasks |
+| POST | `/boards/{board_id}/lists` | Create a list |
+| PATCH | `/boards/{board_id}/lists/{list_id}` | Rename a list |
+| DELETE | `/boards/{board_id}/lists/{list_id}` | Delete a list and its tasks |
+| PUT | `/boards/{board_id}/lists/order` | Reorder lists |
 
 ### Tasks (auth required)
 | Method | Path | Description |
 |--------|------|-------------|
-| POST | `/lists/{list_id}/tasks` | Create a task in a list |
-| PATCH | `/tasks/{task_id}` | Update task name, description, or color tag |
-| DELETE | `/tasks/{task_id}` | Delete a task |
-| POST | `/tasks/{task_id}/move` | Move task to another list |
+| POST | `/boards/{board_id}/lists/{list_id}/tasks` | Create a task |
+| PATCH | `/boards/{board_id}/tasks/{task_id}` | Update task name, description, or color tag |
+| DELETE | `/boards/{board_id}/tasks/{task_id}` | Delete a task |
+| POST | `/boards/{board_id}/tasks/{task_id}/move` | Move task to another list |
+
+### Search (auth required)
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/boards/{board_id}/search?q=` | Search tasks by name or description |
+
+### WebSocket
+| Path | Description |
+|------|-------------|
+| `ws://.../ws/{board_id}` | Real-time board updates |
 
 Interactive API docs available at `http://localhost:8000/docs`.
 
 ## Database Architecture
 
-**Firestore collection:** `syncup`
+**Firestore collections:**
 
-| Document | Schema | Description |
-|----------|--------|-------------|
-| `users` | `{ "users": { "username": "hashed_pw", ... } }` | Global user registry |
-| `tasks_{username}` | `{ "lists": {...}, "tasks": {...} }` | Per-user lists and tasks |
+| Collection | Document | Description |
+|------------|----------|-------------|
+| `boards` | `board_{board_id}` | Board data: lists, tasks, owner, users |
+| `users` | `users` | Global user registry |
 
 ## Auth Flow
 
@@ -113,10 +139,15 @@ Interactive API docs available at `http://localhost:8000/docs`.
 
 ## Features
 
-- User registration, login, logout, password change, account deletion
+- User registration, login, logout
+- Create and manage multiple boards
+- Invite teammates to boards; remove users (owner only)
+- Real-time collaboration via WebSocket — changes appear instantly for all connected users
+- Toast notifications for all board events (task added, list deleted, user removed, etc.)
 - Create, rename, and delete task lists
-- Add, edit, and delete tasks with optional descriptions and color tags
-- Move tasks between lists
-- Toast notifications for all user actions
+- Drag-and-drop reordering of lists and tasks
+- Add, edit (double-click), and delete tasks with optional descriptions and color tags
+- Move tasks between lists via drag-and-drop
+- Search tasks by name or description with live results and scroll-to-highlight
 - Responsive grid layout adapting to any screen size
-- Data persisted in Firestore per user with in-memory caching
+- Data persisted in Firestore

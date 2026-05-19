@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SyncUp — Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style/dashboard.css">
+</head>
+<body>
+    <div class="grain"></div>
+    <div class="bg-orb orb-1"></div>
+    <div class="bg-orb orb-2"></div>
+
+    <header>
+        <a href="/static/html/boards.html" class="logo">
+            <span class="logo-mark">S</span>
+            <span class="logo-text">SyncUp</span>
+        </a>
+        <nav class="nav-links">
+            <a href="/static/html/boards.html" class="nav-link">Boards</a>
+            <a href="/static/html/dashboard.html" class="nav-link active">Dashboard</a>
+            <span style="color:var(--muted);font-size:14px;">Hi, <span id="username-label"></span></span>
+            <button onclick="logout()">Log out</button>
+        </nav>
+    </header>
+
+    <main>
+        <h1>Dashboard</h1>
+        <p class="subtitle">An at-a-glance summary of your workspace.</p>
+
+        <div id="loading" class="loading">Crunching the numbers…</div>
+
+        <div id="dashboard-content" style="display:none;">
+            <!-- HEADLINE STATS -->
+            <section class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-label">Boards total</div>
+                    <div class="stat-value" id="stat-boards-total">0</div>
+                    <div class="stat-sub"><span id="stat-boards-owned">0</span> owned · <span id="stat-boards-shared">0</span> shared</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Tasks total</div>
+                    <div class="stat-value" id="stat-tasks-total">0</div>
+                    <div class="stat-sub">across all boards</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Lists total</div>
+                    <div class="stat-value" id="stat-lists-total">0</div>
+                    <div class="stat-sub"><span id="stat-empty-lists">0</span> empty</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Collaborators</div>
+                    <div class="stat-value" id="stat-collabs">0</div>
+                    <div class="stat-sub">on your boards</div>
+                </div>
+            </section>
+
+            <!-- DUE DATES + AVERAGES -->
+            <section class="two-col">
+                <div class="panel">
+                    <h2>Due dates</h2>
+                    <div class="duedate-row overdue">
+                        <span class="dot"></span>
+                        <span class="label">Overdue</span>
+                        <span class="num" id="stat-overdue">0</span>
+                    </div>
+                    <div class="duedate-row upcoming">
+                        <span class="dot"></span>
+                        <span class="label">Due in the next 7 days</span>
+                        <span class="num" id="stat-upcoming">0</span>
+                    </div>
+                    <div class="duedate-row scheduled">
+                        <span class="dot"></span>
+                        <span class="label">Tasks with a due date</span>
+                        <span class="num" id="stat-with-due">0</span>
+                    </div>
+                    <div class="duedate-row no-due">
+                        <span class="dot"></span>
+                        <span class="label">No due date</span>
+                        <span class="num" id="stat-no-due">0</span>
+                    </div>
+                </div>
+
+                <div class="panel">
+                    <h2>Averages</h2>
+                    <div class="avg-row">
+                        <div class="avg-label">Tasks per board</div>
+                        <div class="avg-value" id="stat-avg-tasks-board">0</div>
+                    </div>
+                    <div class="avg-row">
+                        <div class="avg-label">Lists per board</div>
+                        <div class="avg-value" id="stat-avg-lists-board">0</div>
+                    </div>
+                    <div class="avg-row">
+                        <div class="avg-label">Tasks per list</div>
+                        <div class="avg-value" id="stat-avg-tasks-list">0</div>
+                    </div>
+                    <div class="avg-row">
+                        <div class="avg-label">Empty boards</div>
+                        <div class="avg-value" id="stat-empty-boards">0</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- COLOR TAGS BREAKDOWN -->
+            <section class="panel">
+                <h2>Tasks by color tag</h2>
+                <div id="color-bar" class="color-bar"></div>
+                <div id="color-legend" class="color-legend"></div>
+            </section>
+
+            <!-- HIGHLIGHTS -->
+            <section class="two-col">
+                <div class="panel">
+                    <h2>Biggest board</h2>
+                    <div class="highlight" id="biggest-board">—</div>
+                </div>
+                <div class="panel">
+                    <h2>Most lists</h2>
+                    <div class="highlight" id="most-lists-board">—</div>
+                </div>
+            </section>
+
+            <!-- BOARDS TABLE -->
+            <section class="panel">
+                <h2>Per-board breakdown</h2>
+                <div id="boards-table" class="boards-table"></div>
+            </section>
+
+            <!-- COLLABORATORS -->
+            <section class="panel">
+                <h2>Collaborators on your boards</h2>
+                <div id="collabs-list" class="collabs-list"></div>
+            </section>
+        </div>
+    </main>
+
+    <div id="toast" class="toast"></div>
+    <script src="/static/script/dashboard.js"></script>
+</body>
+</html>

@@ -357,6 +357,116 @@ async def reorder_lists(board_id: str, body: dict):
 def load_board():
     return {"board_name" : get_board("tasks_test")}
 
+@app.get("/dashboard/stats")
+def dashboard_stats(username: str = Depends(get_current_user)):
+    from datetime import date, timedelta
+
+    user_boards = get_user_boards(username)
+
+    boards_owned = 0
+    boards_shared = 0
+    total_lists = 0
+    total_tasks = 0
+    empty_boards = 0
+    empty_lists = 0
+    tasks_by_color: dict[str, int] = {}
+    tasks_with_due_date = 0
+    overdue_tasks = 0
+    upcoming_tasks = 0
+    tasks_no_due_date = 0
+    collaborators: set[str] = set()
+    biggest_board = {"name": None, "task_count": 0}
+    most_lists_board = {"name": None, "list_count": 0}
+    boards_brief: list[dict] = []
+
+    today = date.today()
+    in_a_week = today + timedelta(days=7)
+
+    for b in user_boards:
+        manager = load_task_manager(b["id"])
+        if not manager:
+            continue
+
+        is_owner = manager.owner == username
+        if is_owner:
+            boards_owned += 1
+            for u in manager.users:
+                if u != username:
+                    collaborators.add(u)
+        else:
+            boards_shared += 1
+
+        list_count = len(manager.lists)
+        task_count = len(manager.tasks)
+        total_lists += list_count
+        total_tasks += task_count
+
+        if task_count == 0:
+            empty_boards += 1
+
+        for lst in manager.lists.values():
+            if len(lst.task_ids) == 0:
+                empty_lists += 1
+
+        for t in manager.tasks.values():
+            color = t.color_tag.value if hasattr(t.color_tag, "value") else str(t.color_tag)
+            tasks_by_color[color] = tasks_by_color.get(color, 0) + 1
+
+            if t.due_date:
+                tasks_with_due_date += 1
+                try:
+                    d = date.fromisoformat(t.due_date)
+                    if d < today:
+                        overdue_tasks += 1
+                    elif d <= in_a_week:
+                        upcoming_tasks += 1
+                except ValueError:
+                    pass
+            else:
+                tasks_no_due_date += 1
+
+        if task_count > biggest_board["task_count"]:
+            biggest_board = {"name": manager.name or b["id"], "task_count": task_count}
+        if list_count > most_lists_board["list_count"]:
+            most_lists_board = {"name": manager.name or b["id"], "list_count": list_count}
+
+        boards_brief.append({
+            "id": b["id"],
+            "name": manager.name or b["id"],
+            "is_owner": is_owner,
+            "lists": list_count,
+            "tasks": task_count,
+        })
+
+    boards_total = boards_owned + boards_shared
+    avg_tasks_per_board = round(total_tasks / boards_total, 1) if boards_total else 0
+    avg_lists_per_board = round(total_lists / boards_total, 1) if boards_total else 0
+    avg_tasks_per_list = round(total_tasks / total_lists, 1) if total_lists else 0
+
+    return {
+        "username": username,
+        "boards_total": boards_total,
+        "boards_owned": boards_owned,
+        "boards_shared": boards_shared,
+        "total_lists": total_lists,
+        "total_tasks": total_tasks,
+        "empty_boards": empty_boards,
+        "empty_lists": empty_lists,
+        "tasks_by_color": tasks_by_color,
+        "tasks_with_due_date": tasks_with_due_date,
+        "tasks_no_due_date": tasks_no_due_date,
+        "overdue_tasks": overdue_tasks,
+        "upcoming_tasks": upcoming_tasks,
+        "collaborators_count": len(collaborators),
+        "collaborators": sorted(collaborators),
+        "biggest_board": biggest_board,
+        "most_lists_board": most_lists_board,
+        "avg_tasks_per_board": avg_tasks_per_board,
+        "avg_lists_per_board": avg_lists_per_board,
+        "avg_tasks_per_list": avg_tasks_per_list,
+        "boards": boards_brief,
+    }
+
 @app.get("/boards/{board_id}/search")
 def search_tasks(board_id: str, q: str, username: str = Depends(get_current_user)):
     manager = get_board(board_id)
